@@ -5,8 +5,156 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         xmlns:local="clr-namespace:Neas.SalesManager.Wpf"
         mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800">
-    <Grid>
+        Title="Neas Energy - District Sales Manager" Height="700" Width="1100"
+        WindowStartupLocation="CenterScreen" Background="#F8FAFC">
 
+    <Window.Resources>
+        <local:RoleColorConverter x:Key="RoleColorConverter"/>
+
+        <Style x:Key="CardStyle" TargetType="Border">
+            <Setter Property="Background" Value="White"/>
+            <Setter Property="CornerRadius" Value="6"/>
+            <Setter Property="Padding" Value="16"/>
+            <Setter Property="Margin" Value="6"/>
+            <Setter Property="Effect">
+                <Setter.Value>
+                    <DropShadowEffect BlurRadius="8" Color="#000000" Opacity="0.06" ShadowDepth="2"/>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="HeaderLabel" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="FontWeight" Value="Bold"/>
+            <Setter Property="Foreground" Value="#0F172A"/>
+            <Setter Property="Margin" Value="0,0,0,10"/>
+        </Style>
+    </Window.Resources>
+
+    <Grid Margin="10">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Top Header Bar -->
+        <Border Grid.Row="0" Background="#0F172A" CornerRadius="6" Padding="16,12" Margin="6,4">
+            <DockPanel>
+                <TextBlock Text="Neas Energy | District &amp; Store Sales Management" 
+                           Foreground="White" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                <Button Content="Refresh List" Command="{Binding LoadDistrictsCommand}" 
+                        DockPanel.Dock="Right" HorizontalAlignment="Right"
+                        Padding="12,6" Background="#2563EB" Foreground="White" 
+                        BorderThickness="0" FontWeight="Medium" Cursor="Hand"/>
+            </DockPanel>
+        </Border>
+
+        <!-- Center Workspace -->
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="300"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- District Selection Panel -->
+            <Border Grid.Column="0" Style="{StaticResource CardStyle}">
+                <DockPanel>
+                    <TextBlock Text="Districts" Style="{StaticResource HeaderLabel}" DockPanel.Dock="Top"/>
+                    <ListBox ItemsSource="{Binding Districts}" 
+                             SelectedItem="{Binding SelectedDistrict, Mode=TwoWay}"
+                             DisplayMemberPath="Name" FontSize="14"
+                             BorderBrush="#CBD5E1" BorderThickness="1">
+                        <ListBox.ItemContainerStyle>
+                            <Style TargetType="ListBoxItem">
+                                <Setter Property="Padding" Value="8,6"/>
+                                <Setter Property="Cursor" Value="Hand"/>
+                            </Style>
+                        </ListBox.ItemContainerStyle>
+                    </ListBox>
+                </DockPanel>
+            </Border>
+
+            <!-- Details Dashboard Panel -->
+            <Grid Grid.Column="1">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
+                </Grid.RowDefinitions>
+
+                <!-- Salespersons Table -->
+                <Border Grid.Row="0" Style="{StaticResource CardStyle}">
+                    <DockPanel>
+                        <TextBlock Text="Assigned Salespersons" Style="{StaticResource HeaderLabel}" DockPanel.Dock="Top"/>
+                        <DataGrid ItemsSource="{Binding AssociatedSalespersons}" AutoGenerateColumns="False"
+                                  CanUserAddRows="False" IsReadOnly="True" GridLinesVisibility="Horizontal"
+                                  HeadersVisibility="Column" HorizontalGridLinesBrush="#E2E8F0" Background="White" BorderThickness="0">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Name" Binding="{Binding FullName}" Width="160"/>
+                                <DataGridTextColumn Header="Email" Binding="{Binding Email}" Width="220"/>
+                                <DataGridTemplateColumn Header="Role" Width="100">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <Border CornerRadius="4" Padding="6,2" HorizontalAlignment="Left"
+                                                    Background="{Binding IsPrimary, Converter={StaticResource RoleColorConverter}}">
+                                                <TextBlock Text="{Binding RoleDisplay}" Foreground="White" FontWeight="Bold" FontSize="11"/>
+                                            </Border>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                                <DataGridTemplateColumn Header="Action" Width="80">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <Button Content="Remove" 
+                                                    Command="{Binding DataContext.RemoveSalespersonCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                    CommandParameter="{Binding}"
+                                                    Background="#EF4444" Foreground="White" BorderThickness="0" Padding="6,2" FontSize="11"/>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
+                </Border>
+
+                <!-- Stores Table -->
+                <Border Grid.Row="1" Style="{StaticResource CardStyle}">
+                    <DockPanel>
+                        <TextBlock Text="Stores in District" Style="{StaticResource HeaderLabel}" DockPanel.Dock="Top"/>
+                        <DataGrid ItemsSource="{Binding Stores}" AutoGenerateColumns="False"
+                                  CanUserAddRows="False" IsReadOnly="True" GridLinesVisibility="Horizontal"
+                                  HeadersVisibility="Column" HorizontalGridLinesBrush="#E2E8F0" Background="White" BorderThickness="0">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="ID" Binding="{Binding StoreId}" Width="60"/>
+                                <DataGridTextColumn Header="Store Name" Binding="{Binding Name}" Width="200"/>
+                                <DataGridTextColumn Header="Address" Binding="{Binding Address}" Width="*"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+                    </DockPanel>
+                </Border>
+
+                <!-- Assign Action Bar -->
+                <Border Grid.Row="2" Style="{StaticResource CardStyle}">
+                    <StackPanel Orientation="Vertical">
+                        <TextBlock Text="Assign Salesperson to District" Style="{StaticResource HeaderLabel}"/>
+                        <StackPanel Orientation="Horizontal">
+                            <TextBlock Text="Salesperson ID:" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBox Text="{Binding NewSalespersonId, UpdateSourceTrigger=PropertyChanged}" Width="70" Padding="4,2" Margin="0,0,16,0"/>
+                            <CheckBox IsChecked="{Binding AssignAsPrimary}" Content="Assign as Primary Salesperson" VerticalAlignment="Center" Margin="0,0,16,0"/>
+                            <Button Content="Assign Salesperson" Command="{Binding AssignSalespersonCommand}"
+                                    Padding="12,5" Background="#10B981" Foreground="White" BorderThickness="0" FontWeight="SemiBold" Cursor="Hand"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Grid>
+
+        <!-- Bottom Status Bar -->
+        <StatusBar Grid.Row="2" Margin="6,4">
+            <StatusBarItem>
+                <TextBlock Text="{Binding StatusMessage}" Foreground="#475569" FontSize="12"/>
+            </StatusBarItem>
+        </StatusBar>
     </Grid>
 </Window>

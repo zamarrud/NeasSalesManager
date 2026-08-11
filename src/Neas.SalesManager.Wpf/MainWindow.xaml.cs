@@ -1,23 +1,27 @@
-﻿using System.Text;
+﻿// src/Neas.SalesManager.Wpf/MainWindow.xaml.cs
+using System.Net.Http;
 using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using System.Windows.Shapes;
+using Neas.SalesManager.Wpf.Services;
+using Neas.SalesManager.Wpf.ViewModels;
 
-namespace Neas.SalesManager.Wpf;
-
-/// <summary>
-/// Interaction logic for MainWindow.xaml
-/// </summary>
-public partial class MainWindow : Window
+namespace Neas.SalesManager.Wpf
 {
-    public MainWindow()
+    public partial class MainWindow : Window
     {
-        InitializeComponent();
+        public MainWindow()
+        {
+            InitializeComponent();
+
+            // Setup API client and viewmodel
+            var httpClient = new HttpClient();
+            ISalesApiClient apiClient = new SalesApiClient(httpClient);
+            var viewModel = new DistrictOverviewViewModel(apiClient);
+
+            // Bind DataContext
+            DataContext = viewModel;
+
+            // Load initial data
+            Loaded += async (s, e) => await viewModel.LoadDistrictsAsync();
+        }
     }
 }
