@@ -1,5 +1,11 @@
 ﻿namespace Neas.SalesManager.Api.DTOs;
 
+// Contract for atomic District + Primary Salesperson creation
+public record CreateDistrictRequest(
+    string Name,
+    int PrimarySalespersonId
+);
+
 public record DistrictSummaryDto(
     int DistrictId,
     string Name

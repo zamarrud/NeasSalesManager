@@ -19,6 +19,20 @@ public class DistrictsController : ControllerBase
         _logger = logger;
     }
 
+    [HttpPost]
+    [ProducesResponseType(typeof(object), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> CreateDistrict([FromBody] CreateDistrictRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name) || request.PrimarySalespersonId <= 0)
+        {
+            return BadRequest(new { Message = "District Name and a valid Primary Salesperson ID are required." });
+        }
+
+        var newDistrictId = await _repository.CreateDistrictAsync(request.Name, request.PrimarySalespersonId);
+        return CreatedAtAction(nameof(GetDistrictDetails), new { id = newDistrictId }, new { DistrictId = newDistrictId, Name = request.Name });
+    }
+
     [HttpGet]
     [ProducesResponseType(typeof(IEnumerable<DistrictSummaryDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetDistricts()

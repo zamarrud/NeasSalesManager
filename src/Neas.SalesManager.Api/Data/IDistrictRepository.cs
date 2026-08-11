@@ -5,6 +5,7 @@ namespace Neas.SalesManager.Api.Data;
 
 public interface IDistrictRepository
 {
+    Task<int> CreateDistrictAsync(string name, int primarySalespersonId);
     Task<IEnumerable<DistrictSummaryDto>> GetAllDistrictsAsync();
     Task<DistrictDetailsDto?> GetDistrictDetailsAsync(int districtId);
     Task<IEnumerable<SalespersonDto>> GetAllSalespersonsAsync();

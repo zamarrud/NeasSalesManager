@@ -4,6 +4,7 @@ namespace Neas.SalesManager.Wpf.Services;
 
 public interface ISalesApiClient
 {
+    Task CreateDistrictAsync(string name, int primarySalespersonId);
     Task<List<DistrictSummary>> GetDistrictsAsync();
     Task<DistrictDetails?> GetDistrictDetailsAsync(int districtId);
     Task<List<Salesperson>> GetAllSalespersonsAsync();

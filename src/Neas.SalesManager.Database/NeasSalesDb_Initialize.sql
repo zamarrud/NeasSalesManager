@@ -1,5 +1,5 @@
 -- ============================================================================
--- DATABASE CREATION AND INITIALIZATION SCRIPT (FIXED)
+-- DATABASE CREATION AND INITIALIZATION SCRIPT (ENTERPRISE EDITION)
 -- Project: Neas Energy District Sales Manager
 -- Engine: Microsoft SQL Server 2019+
 -- ============================================================================
@@ -34,7 +34,7 @@ GO
 CREATE TABLE dbo.District (
     DistrictId  INT IDENTITY(1,1) NOT NULL,
     Name        NVARCHAR(100)     NOT NULL,
-    CreatedUtc  DATETIME2(7)      NOT NULL CONSTRAINT DF_District_CreatedUtc DEFAULT (GETUTCDATE()),
+    CreatedUtc  DATETIME2(7)      NOT NULL CONSTRAINT DF_District_CreatedUtc DEFAULT (SYSUTCDATETIME()),
     
     CONSTRAINT PK_District PRIMARY KEY CLUSTERED (DistrictId ASC),
     CONSTRAINT UQ_District_Name UNIQUE NONCLUSTERED (Name ASC)
@@ -47,7 +47,7 @@ CREATE TABLE dbo.Salesperson (
     FirstName     NVARCHAR(50)      NOT NULL,
     LastName      NVARCHAR(50)      NOT NULL,
     Email         NVARCHAR(100)     NOT NULL,
-    CreatedUtc    DATETIME2(7)      NOT NULL CONSTRAINT DF_Salesperson_CreatedUtc DEFAULT (GETUTCDATE()),
+    CreatedUtc    DATETIME2(7)      NOT NULL CONSTRAINT DF_Salesperson_CreatedUtc DEFAULT (SYSUTCDATETIME()),
 
     CONSTRAINT PK_Salesperson PRIMARY KEY CLUSTERED (SalespersonId ASC),
     CONSTRAINT UQ_Salesperson_Email UNIQUE NONCLUSTERED (Email ASC)
@@ -60,7 +60,7 @@ CREATE TABLE dbo.Store (
     DistrictId  INT               NOT NULL,
     Name        NVARCHAR(150)     NOT NULL,
     Address     NVARCHAR(250)     NULL,
-    CreatedUtc  DATETIME2(7)      NOT NULL CONSTRAINT DF_Store_CreatedUtc DEFAULT (GETUTCDATE()),
+    CreatedUtc  DATETIME2(7)      NOT NULL CONSTRAINT DF_Store_CreatedUtc DEFAULT (SYSUTCDATETIME()),
 
     CONSTRAINT PK_Store PRIMARY KEY CLUSTERED (StoreId ASC),
     CONSTRAINT FK_Store_District FOREIGN KEY (DistrictId) 
@@ -74,7 +74,7 @@ CREATE TABLE dbo.DistrictSalesperson (
     DistrictId    INT          NOT NULL,
     SalespersonId INT          NOT NULL,
     IsPrimary     BIT          NOT NULL CONSTRAINT DF_DistrictSalesperson_IsPrimary DEFAULT (0),
-    AssignedUtc   DATETIME2(7) NOT NULL CONSTRAINT DF_DistrictSalesperson_AssignedUtc DEFAULT (GETUTCDATE()),
+    AssignedUtc   DATETIME2(7) NOT NULL CONSTRAINT DF_DistrictSalesperson_AssignedUtc DEFAULT (SYSUTCDATETIME()),
 
     CONSTRAINT PK_DistrictSalesperson PRIMARY KEY CLUSTERED (DistrictId ASC, SalespersonId ASC),
     CONSTRAINT FK_DistrictSalesperson_District FOREIGN KEY (DistrictId) 
@@ -108,15 +108,44 @@ INCLUDE (DistrictId, IsPrimary);
 GO
 
 -- ============================================================================
--- 3. STORED PROCEDURES (CORRECTED SYNTAX)
+-- 3. TRIGGERS: MANDATORY SINGLE PRIMARY ENFORCEMENT
+-- ============================================================================
+
+CREATE OR ALTER TRIGGER dbo.trg_EnforceSinglePrimaryPerDistrict
+ON dbo.DistrictSalesperson
+AFTER UPDATE, DELETE
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    -- Check if any affected district is left without exactly ONE primary salesperson
+    IF EXISTS (
+        SELECT d.DistrictId
+        FROM dbo.District d
+        LEFT JOIN dbo.DistrictSalesperson ds 
+            ON d.DistrictId = ds.DistrictId AND ds.IsPrimary = 1
+        WHERE d.DistrictId IN (SELECT DistrictId FROM deleted)
+        GROUP BY d.DistrictId
+        HAVING COUNT(ds.SalespersonId) = 0
+    )
+    BEGIN
+        RAISERROR ('Business Rule Violation: Every district MUST have exactly ONE primary salesperson.', 16, 1);
+        ROLLBACK TRANSACTION;
+        RETURN;
+    END
+END;
+GO
+
+-- ============================================================================
+-- 4. STORED PROCEDURES
 -- ============================================================================
 
 -- ----------------------------------------------------------------------------
 -- SP: Upsert or Assign Salesperson to a District
--- Handles primary assignment toggles atomically inside an explicit transaction
+-- Handles primary toggles and role swaps inside an explicit transaction
 -- ----------------------------------------------------------------------------
-CREATE PROCEDURE dbo.sp_AssignSalespersonToDistrict
-        @DistrictId INT,
+CREATE OR ALTER PROCEDURE dbo.sp_AssignSalespersonToDistrict
+    @DistrictId INT,
     @SalespersonId INT,
     @IsPrimary BIT
 AS
@@ -125,7 +154,24 @@ BEGIN
     
     BEGIN TRANSACTION;
     BEGIN TRY
-        -- 1. If promoting to Primary, demote the current primary salesperson for this district
+        -- Guard Clause: Prevent demoting the primary salesperson if no replacement is specified
+        IF @IsPrimary = 0
+        BEGIN
+            IF EXISTS (
+                SELECT 1 
+                FROM dbo.DistrictSalesperson 
+                WHERE DistrictId = @DistrictId 
+                  AND SalespersonId = @SalespersonId 
+                  AND IsPrimary = 1
+            )
+            BEGIN
+                RAISERROR ('Cannot demote the primary salesperson. Assign another salesperson as primary first to swap roles.', 16, 1);
+                ROLLBACK TRANSACTION;
+                RETURN;
+            END
+        END
+
+        -- If promoting to Primary, demote the current primary salesperson for this district
         IF @IsPrimary = 1
         BEGIN
             UPDATE dbo.DistrictSalesperson
@@ -133,7 +179,7 @@ BEGIN
             WHERE DistrictId = @DistrictId AND IsPrimary = 1;
         END
 
-        -- 2. Upsert (Insert or Update) the target salesperson assignment
+        -- Upsert (Insert or Update) the target salesperson assignment
         MERGE dbo.DistrictSalesperson AS target
         USING (SELECT @DistrictId AS DistrictId, @SalespersonId AS SalespersonId) AS source
         ON (target.DistrictId = source.DistrictId AND target.SalespersonId = source.SalespersonId)
@@ -154,22 +200,54 @@ END;
 GO
 
 -- ----------------------------------------------------------------------------
+-- SP: Atomic Creation of District + Mandatory Primary Salesperson
+-- ----------------------------------------------------------------------------
+CREATE OR ALTER PROCEDURE dbo.sp_CreateDistrict
+    @Name NVARCHAR(100),
+    @PrimarySalespersonId INT,
+    @NewDistrictId INT OUTPUT
+AS
+BEGIN
+    SET NOCOUNT ON;
+    BEGIN TRANSACTION;
+    BEGIN TRY
+        -- 1. Insert District
+        INSERT INTO dbo.District (Name)
+        VALUES (@Name);
+
+        SET @NewDistrictId = SCOPE_IDENTITY();
+
+        -- 2. Immediately assign the mandatory Primary Salesperson
+        INSERT INTO dbo.DistrictSalesperson (DistrictId, SalespersonId, IsPrimary)
+        VALUES (@NewDistrictId, @PrimarySalespersonId, 1);
+
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0 
+            ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH
+END;
+GO
+
+-- ----------------------------------------------------------------------------
 -- SP: Retrieve Full Details for a Single District
 -- ----------------------------------------------------------------------------
-CREATE PROCEDURE dbo.sp_GetDistrictDetails
-        @DistrictId INT
+CREATE OR ALTER PROCEDURE dbo.sp_GetDistrictDetails
+    @DistrictId INT
 AS
 BEGIN
     SET NOCOUNT ON;
 
-    -- Result Set 1: District (Matches DistrictSummaryDto)
+    -- Result Set 1: District
     SELECT 
         DistrictId, 
         Name
     FROM dbo.District
     WHERE DistrictId = @DistrictId;
 
-    -- Result Set 2: Stores (Matches StoreDto)
+    -- Result Set 2: Stores
     SELECT 
         StoreId, 
         Name, 
@@ -177,7 +255,7 @@ BEGIN
     FROM dbo.Store
     WHERE DistrictId = @DistrictId;
 
-    -- Result Set 3: Salespersons (Matches SalespersonDto)
+    -- Result Set 3: Salespersons
     SELECT 
         s.SalespersonId, 
         s.FirstName, 
@@ -191,7 +269,7 @@ END;
 GO
 
 -- ============================================================================
--- 4. SEED DATA GENERATION
+-- 5. SEED DATA GENERATION
 -- ============================================================================
 
 BEGIN TRANSACTION;
@@ -223,7 +301,7 @@ INSERT INTO dbo.Store (DistrictId, Name, Address) VALUES
 COMMIT TRANSACTION;
 GO
 
--- Assign Salespersons using the Stored Procedure
+-- Assign Salespersons using stored procedure to respect triggers
 EXEC dbo.sp_AssignSalespersonToDistrict @DistrictId = 1, @SalespersonId = 1, @IsPrimary = 1;
 EXEC dbo.sp_AssignSalespersonToDistrict @DistrictId = 1, @SalespersonId = 2, @IsPrimary = 0;
 
@@ -231,6 +309,8 @@ EXEC dbo.sp_AssignSalespersonToDistrict @DistrictId = 2, @SalespersonId = 1, @Is
 EXEC dbo.sp_AssignSalespersonToDistrict @DistrictId = 2, @SalespersonId = 4, @IsPrimary = 0;
 
 EXEC dbo.sp_AssignSalespersonToDistrict @DistrictId = 3, @SalespersonId = 3, @IsPrimary = 1;
+
+EXEC dbo.sp_AssignSalespersonToDistrict @DistrictId = 4, @SalespersonId = 4, @IsPrimary = 1;
 GO
 
 -- ============================================================================

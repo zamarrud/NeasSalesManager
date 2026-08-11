@@ -16,6 +16,23 @@ public class DistrictRepository : IDistrictRepository
             ?? throw new ArgumentNullException(nameof(configuration), "DefaultConnection string is missing.");
     }
 
+    public async Task<int> CreateDistrictAsync(string name, int primarySalespersonId)
+    {
+        using var connection = new SqlConnection(_connectionString);
+        var parameters = new DynamicParameters();
+        parameters.Add("@Name", name);
+        parameters.Add("@PrimarySalespersonId", primarySalespersonId);
+        parameters.Add("@NewDistrictId", dbType: DbType.Int32, direction: ParameterDirection.Output);
+
+        await connection.ExecuteAsync(
+            "dbo.sp_CreateDistrict",
+            parameters,
+            commandType: CommandType.StoredProcedure
+        );
+
+        return parameters.Get<int>("@NewDistrictId");
+    }
+
     public async Task<IEnumerable<DistrictSummaryDto>> GetAllDistrictsAsync()
     {
         const string sql = @"

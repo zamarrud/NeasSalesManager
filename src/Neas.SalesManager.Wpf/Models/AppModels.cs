@@ -1,5 +1,10 @@
 ﻿namespace Neas.SalesManager.Wpf.Models;
 
+public record CreateDistrictRequest(
+    string Name,
+    int PrimarySalespersonId
+);
+
 public record DistrictSummary(
     int DistrictId,
     string Name

@@ -14,6 +14,18 @@ public class SalesApiClient : ISalesApiClient
         _httpClient.BaseAddress = new Uri("http://localhost:5000/");
     }
 
+    public async Task CreateDistrictAsync(string name, int primarySalespersonId)
+    {
+        var request = new CreateDistrictRequest(name, primarySalespersonId);
+        var response = await _httpClient.PostAsJsonAsync("api/districts", request);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var errorJson = await response.Content.ReadAsStringAsync();
+            throw new HttpRequestException($"API Error ({response.StatusCode}): {errorJson}");
+        }
+    }
+
     public async Task<List<DistrictSummary>> GetDistrictsAsync()
     {
         return await _httpClient.GetFromJsonAsync<List<DistrictSummary>>("api/districts") ?? new();

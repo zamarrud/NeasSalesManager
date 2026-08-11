@@ -86,6 +86,44 @@ public class MainViewModelTests
 
     #endregion
 
+    #region Create District Tests
+
+    [Fact]
+    public async Task CreateDistrictCommand_CallsApiAndReloads_WhenValidInputProvided()
+    {
+        // Arrange
+        var existingDistrict = new DistrictSummary(1, "Copenhagen Central");
+        var createdDistrict = new DistrictSummary(2, "North Denmark");
+
+        _apiClientMock.SetupSequence(x => x.GetDistrictsAsync())
+            .ReturnsAsync(new List<DistrictSummary> { existingDistrict })
+            .ReturnsAsync(new List<DistrictSummary> { existingDistrict, createdDistrict });
+
+        _apiClientMock.Setup(x => x.GetDistrictDetailsAsync(It.IsAny<int>()))
+            .ReturnsAsync(new DistrictDetails(1, "Copenhagen", new(), new()));
+
+        _apiClientMock.Setup(x => x.CreateDistrictAsync("North Denmark", 5))
+            .Returns(Task.CompletedTask);
+
+        var viewModel = new MainViewModel(_apiClientMock.Object, _dialogServiceMock.Object);
+        await Task.Delay(200);
+
+        viewModel.NewDistrictName = "North Denmark";
+        viewModel.SelectedPrimaryForNewDistrict = _mockSystemSalespersons.First(sp => sp.SalespersonId == 5);
+
+        // Act
+        viewModel.CreateDistrictCommand.Execute(null);
+        await Task.Delay(250); // Give async Task execution time to complete
+
+        // Assert
+        _apiClientMock.Verify(x => x.CreateDistrictAsync("North Denmark", 5), Times.Once);
+        Assert.Equal(2, viewModel.Districts.Count);
+        Assert.True(string.IsNullOrEmpty(viewModel.NewDistrictName));
+        Assert.Equal("District created successfully.", viewModel.StatusMessage);
+    }
+
+    #endregion
+
     #region District Selection Tests
 
     [Fact]
@@ -244,6 +282,34 @@ public class MainViewModelTests
         Assert.Equal(5, newPrimary.SalespersonId);
         Assert.Equal("Michael", newPrimary.FirstName);
         Assert.Equal("Salesperson assigned successfully.", viewModel.StatusMessage);
+    }
+
+    [Fact]
+    public async Task AssignSalespersonCommand_ShowsWarningDialogAndAborts_WhenAttemptingToDemotePrimaryWithoutSwap()
+    {
+        // Arrange
+        var district = new DistrictSummary(1, "Copenhagen Central");
+        var primarySalesperson = new Salesperson(1, "John", "Doe", "john@neas.dk", true);
+
+        var details = new DistrictDetails(1, "Copenhagen Central", new List<Salesperson> { primarySalesperson }, new());
+
+        _apiClientMock.Setup(x => x.GetDistrictsAsync()).ReturnsAsync(new List<DistrictSummary> { district });
+        _apiClientMock.Setup(x => x.GetDistrictDetailsAsync(1)).ReturnsAsync(details);
+
+        var viewModel = new MainViewModel(_apiClientMock.Object, _dialogServiceMock.Object);
+        await Task.Delay(150);
+
+        // Select the current primary salesperson and UNCHECK "Is Primary"
+        viewModel.SelectedSalespersonToAssign = _mockSystemSalespersons.First(sp => sp.SalespersonId == 1);
+        viewModel.IsPrimaryAssign = false;
+
+        // Act
+        viewModel.AssignSalespersonCommand.Execute(null);
+        await Task.Delay(150);
+
+        // Assert
+        _apiClientMock.Verify(x => x.AssignSalespersonAsync(It.IsAny<int>(), It.IsAny<int>(), It.IsAny<bool>()), Times.Never);
+        _dialogServiceMock.Verify(x => x.ShowWarning(It.Is<string>(s => s.Contains("Every district must have a primary salesperson")), "Cannot Remove Primary Status"), Times.Once);
     }
 
     #endregion

@@ -17,7 +17,55 @@ public class MainViewModel : ViewModelBase
     // 1. Add new ObservableCollection for the dropdown items
     public ObservableCollection<Salesperson> AvailableSalespersons { get; } = new();
 
+    private string _newDistrictName = string.Empty;
+    public string NewDistrictName
+    {
+        get => _newDistrictName;
+        set
+        {
+            _newDistrictName = value;
+            OnPropertyChanged();
+            (CreateDistrictCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        }
+    }
+
+    private Salesperson? _selectedPrimaryForNewDistrict;
+    public Salesperson? SelectedPrimaryForNewDistrict
+    {
+        get => _selectedPrimaryForNewDistrict;
+        set
+        {
+            _selectedPrimaryForNewDistrict = value;
+            OnPropertyChanged();
+            (CreateDistrictCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        }
+    }
+
     private DistrictSummary? _selectedDistrict;
+    public DistrictSummary? SelectedDistrict
+    {
+        get => _selectedDistrict;
+        set
+        {
+            _selectedDistrict = value;
+            OnPropertyChanged();
+            _ = LoadDistrictDetailsAsync();
+            (AssignSalespersonCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        }
+    }
+
+    private Salesperson? _selectedSalesperson;
+    public Salesperson? SelectedSalesperson
+    {
+        get => _selectedSalesperson;
+        set
+        {
+            _selectedSalesperson = value;
+            OnPropertyChanged();
+            (RemoveSalespersonCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+        }
+    }
+
     // 2. Add property for the selected salesperson in the dropdown
     private Salesperson? _selectedSalespersonToAssign;
     public Salesperson? SelectedSalespersonToAssign
@@ -27,33 +75,8 @@ public class MainViewModel : ViewModelBase
         {
             _selectedSalespersonToAssign = value;
             OnPropertyChanged();
-            // Automatically updates command execution availability
             (AssignSalespersonCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         }
-    }
-    public DistrictSummary? SelectedDistrict
-    {
-        get => _selectedDistrict;
-        set
-        {
-            _selectedDistrict = value;
-            OnPropertyChanged();
-            _ = LoadDistrictDetailsAsync();
-        }
-    }
-
-    private Salesperson? _selectedSalesperson;
-    public Salesperson? SelectedSalesperson
-    {
-        get => _selectedSalesperson;
-        set { _selectedSalesperson = value; OnPropertyChanged(); }
-    }
-
-    private int _assignSalespersonId = 1;
-    public int AssignSalespersonId
-    {
-        get => _assignSalespersonId;
-        set { _assignSalespersonId = value; OnPropertyChanged(); }
     }
 
     private bool _isPrimaryAssign;
@@ -69,7 +92,9 @@ public class MainViewModel : ViewModelBase
         get => _statusMessage;
         set { _statusMessage = value; OnPropertyChanged(); }
     }
+         
 
+    public ICommand CreateDistrictCommand { get; }
     public ICommand RefreshCommand { get; }
     public ICommand AssignSalespersonCommand { get; }
     public ICommand RemoveSalespersonCommand { get; }
@@ -79,6 +104,7 @@ public class MainViewModel : ViewModelBase
         _apiClient = apiClient;
         _dialogService = dialogService;
 
+        CreateDistrictCommand = new AsyncRelayCommand(CreateDistrictAsync, () => !string.IsNullOrWhiteSpace(NewDistrictName) && SelectedPrimaryForNewDistrict != null);
         RefreshCommand = new AsyncRelayCommand(LoadInitialDataAsync);
         AssignSalespersonCommand = new AsyncRelayCommand(AssignSalespersonAsync, () => SelectedDistrict != null);
         RemoveSalespersonCommand = new AsyncRelayCommand(RemoveSalespersonAsync, () => SelectedSalesperson != null);
@@ -98,7 +124,10 @@ public class MainViewModel : ViewModelBase
             foreach (var sp in allSalespersons) AvailableSalespersons.Add(sp);
 
             if (AvailableSalespersons.Any())
+            {
                 SelectedSalespersonToAssign = AvailableSalespersons.First();
+                SelectedPrimaryForNewDistrict = AvailableSalespersons.First();
+            }
 
             // Load Districts
             Districts.Clear();
@@ -141,9 +170,44 @@ public class MainViewModel : ViewModelBase
         }
     }
 
+    public async Task CreateDistrictAsync()
+    {
+        if (string.IsNullOrWhiteSpace(NewDistrictName) || SelectedPrimaryForNewDistrict == null) return;
+
+        try
+        {
+            StatusMessage = $"Creating district '{NewDistrictName}'...";
+            // 1. Send API Request
+            await _apiClient.CreateDistrictAsync(NewDistrictName, SelectedPrimaryForNewDistrict.SalespersonId);
+
+            // 2. Refresh UI Data Collections
+            await LoadInitialDataAsync();
+
+            // 3. Clear Input Property
+            NewDistrictName = string.Empty;
+            StatusMessage = "District created successfully.";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = "District creation failed.";
+            _dialogService.ShowError(ex.Message, "Creation Error");
+        }
+    }
+
     private async Task AssignSalespersonAsync()
     {
         if (SelectedDistrict == null || SelectedSalespersonToAssign == null) return;
+
+        // Check if user is trying to uncheck 'Is Primary' on the current Primary Salesperson
+        var currentPrimary = Salespersons.FirstOrDefault(sp => sp.IsPrimary);
+        if (!IsPrimaryAssign && currentPrimary != null && currentPrimary.SalespersonId == SelectedSalespersonToAssign.SalespersonId)
+        {
+            _dialogService.ShowWarning(
+                $"'{currentPrimary.FirstName} {currentPrimary.LastName}' is currently the Primary Salesperson.\n\nEvery district must have a primary salesperson. To change the primary salesperson, select a new salesperson and check 'Set as Primary Salesperson'.",
+                "Cannot Remove Primary Status"
+            );
+            return;
+        }
 
         try
         {
