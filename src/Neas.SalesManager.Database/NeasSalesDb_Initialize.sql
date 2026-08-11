@@ -171,41 +171,36 @@ GO
 -- SP: Retrieve Full Details for a Single District
 -- ----------------------------------------------------------------------------
 CREATE PROCEDURE dbo.sp_GetDistrictDetails
-    @DistrictId INT
+        @DistrictId INT
 AS
 BEGIN
     SET NOCOUNT ON;
 
-    -- Resultset 1: District Summary
+    -- Result Set 1: District (Matches DistrictSummaryDto)
     SELECT 
         DistrictId, 
-        Name, 
-        CreatedUtc
-    FROM dbo.District 
+        Name
+    FROM dbo.District
     WHERE DistrictId = @DistrictId;
 
-    -- Resultset 2: Stores in District
+    -- Result Set 2: Stores (Matches StoreDto)
     SELECT 
         StoreId, 
         Name, 
-        Address, 
-        CreatedUtc
-    FROM dbo.Store 
-    WHERE DistrictId = @DistrictId 
-    ORDER BY Name ASC;
+        Address
+    FROM dbo.Store
+    WHERE DistrictId = @DistrictId;
 
-    -- Resultset 3: Salespersons in District
+    -- Result Set 3: Salespersons (Matches SalespersonDto)
     SELECT 
-        sp.SalespersonId, 
-        sp.FirstName, 
-        sp.LastName, 
-        sp.Email, 
-        ds.IsPrimary, 
-        ds.AssignedUtc
+        s.SalespersonId, 
+        s.FirstName, 
+        s.LastName, 
+        s.Email, 
+        ds.IsPrimary
     FROM dbo.DistrictSalesperson ds
-    INNER JOIN dbo.Salesperson sp ON ds.SalespersonId = sp.SalespersonId
-    WHERE ds.DistrictId = @DistrictId
-    ORDER BY ds.IsPrimary DESC, sp.LastName ASC;
+    INNER JOIN dbo.Salesperson s ON ds.SalespersonId = s.SalespersonId
+    WHERE ds.DistrictId = @DistrictId;
 END;
 GO
 

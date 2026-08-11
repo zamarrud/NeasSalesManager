@@ -1,17 +1,10 @@
 ﻿// src/Neas.SalesManager.Api/Data/DistrictRepository.cs
+using System.Data;
 using Dapper;
 using Microsoft.Data.SqlClient;
 using Neas.SalesManager.Api.DTOs;
 
 namespace Neas.SalesManager.Api.Data;
-
-public interface IDistrictRepository
-{
-    Task<IEnumerable<DistrictSummaryDto>> GetAllDistrictsAsync();
-    Task<DistrictDetailsDto?> GetDistrictDetailsAsync(int districtId);
-    Task AssignSalespersonAsync(int districtId, int salespersonId, bool isPrimary);
-    Task RemoveSalespersonAsync(int districtId, int salespersonId);
-}
 
 public class DistrictRepository : IDistrictRepository
 {
@@ -26,7 +19,7 @@ public class DistrictRepository : IDistrictRepository
     public async Task<IEnumerable<DistrictSummaryDto>> GetAllDistrictsAsync()
     {
         const string sql = @"
-            SELECT DistrictId, Name 
+            SELECT DistrictId, Name
             FROM dbo.District 
             ORDER BY Name ASC;";
 
@@ -36,12 +29,13 @@ public class DistrictRepository : IDistrictRepository
 
     public async Task<DistrictDetailsDto?> GetDistrictDetailsAsync(int districtId)
     {
-        // Execute stored procedure to return multiple resultsets in a single DB round-trip
         using var connection = new SqlConnection(_connectionString);
+
+        // Executes sp_GetDistrictDetails to return 3 result sets in a single DB round-trip
         using var multi = await connection.QueryMultipleAsync(
             "dbo.sp_GetDistrictDetails",
             new { DistrictId = districtId },
-            commandType: System.Data.CommandType.StoredProcedure
+            commandType: CommandType.StoredProcedure
         );
 
         var district = await multi.ReadSingleOrDefaultAsync<DistrictSummaryDto>();
@@ -57,11 +51,11 @@ public class DistrictRepository : IDistrictRepository
     {
         using var connection = new SqlConnection(_connectionString);
 
-        // Execute the atomic SP which handles primary re-assignment and upserts in a single transaction
+        // Executes atomic procedure handling primary demotion/upsert inside a single transaction
         await connection.ExecuteAsync(
             "dbo.sp_AssignSalespersonToDistrict",
             new { DistrictId = districtId, SalespersonId = salespersonId, IsPrimary = isPrimary },
-            commandType: System.Data.CommandType.StoredProcedure
+            commandType: CommandType.StoredProcedure
         );
     }
 

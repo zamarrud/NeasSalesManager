@@ -24,13 +24,13 @@ public class ExceptionHandlingMiddleware
         }
         catch (SqlException ex) when (ex.Number is 2601 or 2627)
         {
-            // Unique constraint or duplicate primary key violation
-            _logger.LogError(ex, "SQL Engine Constraint Violation: Duplicate entry or primary assignment conflict.");
+            // Catches Filtered Unique Index violation (UX_DistrictSalesperson_SinglePrimary)
+            _logger.LogError(ex, "SQL Unique Constraint Violation: Duplicate entry or primary assignment conflict.");
             await WriteErrorResponseAsync(context, HttpStatusCode.Conflict, "A primary salesperson is already assigned or duplicate entry exists.");
         }
         catch (Exception ex)
         {
-            _logger.LogCritical(ex, "Unhandled exception encountered during execution.");
+            _logger.LogCritical(ex, "Unhandled exception encountered during request processing.");
             await WriteErrorResponseAsync(context, HttpStatusCode.InternalServerError, "An unexpected server error occurred.");
         }
     }

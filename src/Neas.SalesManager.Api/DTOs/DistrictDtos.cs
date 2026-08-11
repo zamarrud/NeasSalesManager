@@ -1,5 +1,4 @@
-﻿// src/Neas.SalesManager.Api/DTOs/DistrictDtos.cs
-namespace Neas.SalesManager.Api.DTOs;
+﻿namespace Neas.SalesManager.Api.DTOs;
 
 public record DistrictSummaryDto(
     int DistrictId,

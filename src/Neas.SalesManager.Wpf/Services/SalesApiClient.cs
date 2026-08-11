@@ -23,7 +23,7 @@ namespace Neas.SalesManager.Wpf.Services
         public SalesApiClient(HttpClient httpClient)
         {
             _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
-            _httpClient.BaseAddress = new Uri("https://localhost:7028/"); // Ensure this matches your API HTTPS port
+            _httpClient.BaseAddress = new Uri("http://localhost:5000/"); // Ensure this matches your API HTTPS port
         }
 
         public async Task<List<DistrictSummaryApiDto>> GetDistrictsAsync()

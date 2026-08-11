@@ -6,7 +6,7 @@ using Serilog.Sinks.Elasticsearch;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Configure Serilog with Elasticsearch Sink for Neas Observability
+// 1. Serilog Observability Configuration
 builder.Host.UseSerilog((context, configuration) =>
 {
     var elasticUri = context.Configuration["Elasticsearch:Uri"] ?? "http://localhost:9200";
@@ -23,24 +23,26 @@ builder.Host.UseSerilog((context, configuration) =>
         });
 });
 
-// Add services
+// 2. Framework Services
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// Dependency Injection
+// 3. Dependency Injection (Scoped for DB context lifetime)
 builder.Services.AddScoped<IDistrictRepository, DistrictRepository>();
 
 var app = builder.Build();
 
-// Global Exception Middleware
+// 4. Custom Middleware (Positioned early in pipeline)
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
-if (app.Environment.IsDevelopment())
+// 5. Swagger Configuration (Enabled in all environments for demo visibility)
+app.UseSwagger();
+app.UseSwaggerUI(c =>
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "Neas Sales Manager API v1");
+    c.RoutePrefix = "swagger";
+});
 
 app.UseHttpsRedirection();
 app.UseAuthorization();
