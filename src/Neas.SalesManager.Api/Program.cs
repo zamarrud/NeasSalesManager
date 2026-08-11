@@ -1,22 +1,32 @@
+// src/Neas.SalesManager.Api/Program.cs
 using Neas.SalesManager.Api.Data;
 using Neas.SalesManager.Api.Middleware;
 using Serilog;
+using Serilog.Sinks.Elasticsearch;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Configure Serilog
-Log.Logger = new LoggerConfiguration()
-    .ReadFrom.Configuration(builder.Configuration)
-    .Enrich.FromLogContext()
-    .WriteTo.Console()
-    .CreateLogger();
+// Configure Serilog with Elasticsearch Sink for Neas Observability
+builder.Host.UseSerilog((context, configuration) =>
+{
+    var elasticUri = context.Configuration["Elasticsearch:Uri"] ?? "http://localhost:9200";
 
-builder.Host.UseSerilog();
+    configuration
+        .ReadFrom.Configuration(context.Configuration)
+        .Enrich.FromLogContext()
+        .Enrich.WithProperty("Application", "Neas.SalesManager.Api")
+        .WriteTo.Console()
+        .WriteTo.Elasticsearch(new ElasticsearchSinkOptions(new Uri(elasticUri))
+        {
+            AutoRegisterTemplate = true,
+            IndexFormat = $"neas-salesmanager-api-{context.HostingEnvironment.EnvironmentName.ToLower()}-{DateTime.UtcNow:yyyy.MM}"
+        });
+});
 
-// Add services to the container
+// Add services
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(); // Resolved after installing Swashbuckle.AspNetCore
+builder.Services.AddSwaggerGen();
 
 // Dependency Injection
 builder.Services.AddScoped<IDistrictRepository, DistrictRepository>();
@@ -28,8 +38,8 @@ app.UseMiddleware<ExceptionHandlingMiddleware>();
 
 if (app.Environment.IsDevelopment())
 {
-    app.UseSwagger();   // Resolved
-    app.UseSwaggerUI(); // Resolved
+    app.UseSwagger();
+    app.UseSwaggerUI();
 }
 
 app.UseHttpsRedirection();
