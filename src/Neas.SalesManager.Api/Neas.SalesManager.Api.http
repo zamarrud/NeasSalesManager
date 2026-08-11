@@ -1,0 +1,6 @@
+@Neas.SalesManager.Api_HostAddress = http://localhost:5182
+
+GET {{Neas.SalesManager.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

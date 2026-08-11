@@ -1,0 +1,10 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Neas.SalesManager.Api/Neas.SalesManager.Api.csproj" />
+    <Project Path="src/Neas.SalesManager.Wpf/Neas.SalesManager.Wpf.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Neas.SalesManager.Api.Tests/Neas.SalesManager.Api.Tests.csproj" />
+    <Project Path="tests/Neas.SalesManager.Wpf.Tests/Neas.SalesManager.Wpf.Tests.csproj" />
+  </Folder>
+</Solution>
