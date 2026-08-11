@@ -1,55 +1,49 @@
-﻿// src/Neas.SalesManager.Wpf/Services/SalesApiClient.cs
-using System;
-using System.Collections.Generic;
-using System.Net.Http;
+﻿using System.Net.Http;
 using System.Net.Http.Json;
-using System.Threading.Tasks;
 using Neas.SalesManager.Wpf.Models;
 
-namespace Neas.SalesManager.Wpf.Services
+namespace Neas.SalesManager.Wpf.Services;
+
+public class SalesApiClient : ISalesApiClient
 {
-    public interface ISalesApiClient
+    private readonly HttpClient _httpClient;
+
+    public SalesApiClient(HttpClient httpClient)
     {
-        Task<List<DistrictSummaryApiDto>> GetDistrictsAsync();
-        Task<DistrictDetailsApiDto?> GetDistrictDetailsAsync(int districtId);
-        Task<bool> AssignSalespersonAsync(int districtId, int salespersonId, bool isPrimary);
-        Task<bool> RemoveSalespersonAsync(int districtId, int salespersonId);
+        _httpClient = httpClient;
+        _httpClient.BaseAddress = new Uri("http://localhost:5000/");
     }
 
-    public class SalesApiClient : ISalesApiClient
+    public async Task<List<DistrictSummary>> GetDistrictsAsync()
     {
-        private readonly HttpClient _httpClient;
+        return await _httpClient.GetFromJsonAsync<List<DistrictSummary>>("api/districts") ?? new();
+    }
 
-        public SalesApiClient(HttpClient httpClient)
-        {
-            _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
-            _httpClient.BaseAddress = new Uri("http://localhost:5000/"); // Ensure this matches your API HTTPS port
-        }
+    public async Task<DistrictDetails?> GetDistrictDetailsAsync(int districtId)
+    {
+        return await _httpClient.GetFromJsonAsync<DistrictDetails>($"api/districts/{districtId}");
+    }
+    
+    public async Task<List<Salesperson>> GetAllSalespersonsAsync()
+    {
+        return await _httpClient.GetFromJsonAsync<List<Salesperson>>("api/districts/salespersons") ?? new();
+    }
 
-        public async Task<List<DistrictSummaryApiDto>> GetDistrictsAsync()
-        {
-            var result = await _httpClient.GetFromJsonAsync<List<DistrictSummaryApiDto>>("api/districts");
-            return result ?? new List<DistrictSummaryApiDto>();
-        }
+    public async Task AssignSalespersonAsync(int districtId, int salespersonId, bool isPrimary)
+    {
+        var request = new AssignSalespersonRequest(salespersonId, isPrimary);
+        var response = await _httpClient.PutAsJsonAsync($"api/districts/{districtId}/salespersons", request);
 
-        public async Task<DistrictDetailsApiDto?> GetDistrictDetailsAsync(int districtId)
+        if (!response.IsSuccessStatusCode)
         {
-            return await _httpClient.GetFromJsonAsync<DistrictDetailsApiDto>($"api/districts/{districtId}");
+            var errorJson = await response.Content.ReadAsStringAsync();
+            throw new HttpRequestException($"API Error ({response.StatusCode}): {errorJson}");
         }
+    }
 
-        public async Task<bool> AssignSalespersonAsync(int districtId, int salespersonId, bool isPrimary)
-        {
-            var response = await _httpClient.PutAsJsonAsync(
-                $"api/districts/{districtId}/salespersons",
-                new AssignSalespersonApiRequest(salespersonId, isPrimary)
-            );
-            return response.IsSuccessStatusCode;
-        }
-
-        public async Task<bool> RemoveSalespersonAsync(int districtId, int salespersonId)
-        {
-            var response = await _httpClient.DeleteAsync($"api/districts/{districtId}/salespersons/{salespersonId}");
-            return response.IsSuccessStatusCode;
-        }
+    public async Task RemoveSalespersonAsync(int districtId, int salespersonId)
+    {
+        var response = await _httpClient.DeleteAsync($"api/districts/{districtId}/salespersons/{salespersonId}");
+        response.EnsureSuccessStatusCode();
     }
 }

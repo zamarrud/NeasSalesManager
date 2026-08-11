@@ -46,6 +46,17 @@ public class DistrictRepository : IDistrictRepository
 
         return new DistrictDetailsDto(district.DistrictId, district.Name, salespersons, stores);
     }
+        
+    public async Task<IEnumerable<SalespersonDto>> GetAllSalespersonsAsync()
+    {
+        const string sql = @"
+        SELECT SalespersonId, FirstName, LastName, Email, CAST(0 AS BIT) AS IsPrimary
+        FROM dbo.Salesperson
+        ORDER BY FirstName, LastName ASC;";
+
+        using var connection = new SqlConnection(_connectionString);
+        return await connection.QueryAsync<SalespersonDto>(sql);
+    }
 
     public async Task AssignSalespersonAsync(int districtId, int salespersonId, bool isPrimary)
     {

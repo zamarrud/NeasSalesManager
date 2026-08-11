@@ -7,6 +7,7 @@ public interface IDistrictRepository
 {
     Task<IEnumerable<DistrictSummaryDto>> GetAllDistrictsAsync();
     Task<DistrictDetailsDto?> GetDistrictDetailsAsync(int districtId);
+    Task<IEnumerable<SalespersonDto>> GetAllSalespersonsAsync();
     Task AssignSalespersonAsync(int districtId, int salespersonId, bool isPrimary);
     Task RemoveSalespersonAsync(int districtId, int salespersonId);
 }

@@ -42,6 +42,14 @@ public class DistrictsController : ControllerBase
         return Ok(district);
     }
 
+    [HttpGet("salespersons")]
+    [ProducesResponseType(typeof(IEnumerable<SalespersonDto>), StatusCodes.Status200OK)]
+    public async Task<IActionResult> GetAllSalespersons()
+    {
+        var salespersons = await _repository.GetAllSalespersonsAsync();
+        return Ok(salespersons);
+    }
+
     [HttpPut("{id:int}/salespersons")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
