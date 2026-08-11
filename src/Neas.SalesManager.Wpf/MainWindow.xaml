@@ -114,15 +114,36 @@
                     </StackPanel>
                 </GroupBox>
 
-                <!-- Stores List -->
+                <!-- District Stores DataGrid with Empty State Message -->
                 <GroupBox Grid.Row="2" Header="District Stores" FontWeight="Bold">
-                    <DataGrid ItemsSource="{Binding Stores}" AutoGenerateColumns="False" IsReadOnly="True" Margin="5">
-                        <DataGrid.Columns>
-                            <DataGridTextColumn Header="Store ID" Binding="{Binding StoreId}" Width="70"/>
-                            <DataGridTextColumn Header="Store Name" Binding="{Binding Name}" Width="*"/>
-                            <DataGridTextColumn Header="Address" Binding="{Binding Address}" Width="2*"/>
-                        </DataGrid.Columns>
-                    </DataGrid>
+                    <Grid>
+                        <DataGrid ItemsSource="{Binding Stores}" AutoGenerateColumns="False" IsReadOnly="True" Margin="5">
+                            <DataGrid.Columns>
+                                <DataGridTextColumn Header="Store ID" Binding="{Binding StoreId}" Width="70"/>
+                                <DataGridTextColumn Header="Store Name" Binding="{Binding Name}" Width="*"/>
+                                <DataGridTextColumn Header="Address" Binding="{Binding Address}" Width="2*"/>
+                            </DataGrid.Columns>
+                        </DataGrid>
+
+                        <!-- Watermark message when Stores collection is empty -->
+                        <TextBlock Text="No stores registered for this district."
+                               Foreground="#94A3B8"
+                               FontStyle="Italic"
+                               HorizontalAlignment="Center"
+                               VerticalAlignment="Center"
+                               IsHitTestVisible="False">
+                            <TextBlock.Style>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="Visibility" Value="Collapsed"/>
+                                    <Style.Triggers>
+                                        <DataTrigger Binding="{Binding Stores.Count}" Value="0">
+                                            <Setter Property="Visibility" Value="Visible"/>
+                                        </DataTrigger>
+                                    </Style.Triggers>
+                                </Style>
+                            </TextBlock.Style>
+                        </TextBlock>
+                    </Grid>
                 </GroupBox>
             </Grid>
         </Grid>

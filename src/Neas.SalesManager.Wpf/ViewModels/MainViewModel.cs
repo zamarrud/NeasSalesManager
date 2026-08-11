@@ -136,7 +136,7 @@ public class MainViewModel : ViewModelBase
             var districtsList = await _apiClient.GetDistrictsAsync();
             foreach (var d in districtsList) Districts.Add(d);
 
-            if (Districts.Any()) SelectedDistrict = Districts.First();
+            if (Districts.Any() && SelectedDistrict == null) SelectedDistrict = Districts.First();
 
             StatusMessage = "Data loaded successfully.";
         }
