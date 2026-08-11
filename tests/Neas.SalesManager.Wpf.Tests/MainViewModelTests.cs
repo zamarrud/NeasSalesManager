@@ -201,7 +201,9 @@ public class MainViewModelTests
         _apiClientMock.Verify(x => x.AssignSalespersonAsync(1, 5, true), Times.Once);
         Assert.Single(viewModel.Salespersons);
         Assert.Equal("Michael", viewModel.Salespersons[0].FirstName);
-        Assert.Equal("Salesperson assigned successfully.", viewModel.StatusMessage);
+
+        // UPDATE THIS LINE:
+        Assert.Equal("Salesperson assignment updated successfully.", viewModel.StatusMessage);
     }
 
     [Fact]
@@ -235,7 +237,7 @@ public class MainViewModelTests
     [Fact]
     public async Task AssignSalespersonCommand_ReassignsPrimary_WhenIsPrimaryAssignIsTrue()
     {
-        // Arrange: District currently has John Doe (ID 1) as Primary
+        // Arrange
         var district = new DistrictSummary(1, "Copenhagen Central");
         var detailsBefore = new DistrictDetails(
             1,
@@ -244,14 +246,13 @@ public class MainViewModelTests
             new()
         );
 
-        // Details after primary swap: Michael Nygreen (ID 5) is Primary, John Doe is Secondary
         var detailsAfter = new DistrictDetails(
             1,
             "Copenhagen Central",
             new List<Salesperson>
             {
-                new(1, "John", "Doe", "john@neas.dk", false),
-                new(5, "Michael", "Nygreen", "michael@neas.dk", true)
+            new(1, "John", "Doe", "john@neas.dk", false),
+            new(5, "Michael", "Nygreen", "michael@neas.dk", true)
             },
             new()
         );
@@ -266,7 +267,6 @@ public class MainViewModelTests
         var viewModel = new MainViewModel(_apiClientMock.Object, _dialogServiceMock.Object);
         await Task.Delay(150);
 
-        // Select Michael Nygreen and check "Is Primary"
         viewModel.SelectedSalespersonToAssign = _mockSystemSalespersons.First(sp => sp.SalespersonId == 5);
         viewModel.IsPrimaryAssign = true;
 
@@ -280,8 +280,7 @@ public class MainViewModelTests
 
         var newPrimary = viewModel.Salespersons.First(sp => sp.IsPrimary);
         Assert.Equal(5, newPrimary.SalespersonId);
-        Assert.Equal("Michael", newPrimary.FirstName);
-        Assert.Equal("Salesperson assigned successfully.", viewModel.StatusMessage);
+        Assert.Equal("Salesperson assignment updated successfully.", viewModel.StatusMessage);
     }
 
     [Fact]

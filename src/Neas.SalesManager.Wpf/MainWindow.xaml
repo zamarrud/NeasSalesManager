@@ -69,14 +69,30 @@
                 <GroupBox Grid.Row="0" Header="Assigned Salespersons" FontWeight="Bold" Margin="0,0,0,10">
                     <DockPanel>
                         <Button DockPanel.Dock="Bottom" Content="Remove Selected Salesperson" Command="{Binding RemoveSalespersonCommand}" 
-                                Margin="5" Padding="8,4" Background="#EF4444" Foreground="White" HorizontalAlignment="Right"/>
+                            Margin="5" Padding="8,4" Background="#EF4444" Foreground="White" HorizontalAlignment="Right"/>
                         <DataGrid ItemsSource="{Binding Salespersons}" SelectedItem="{Binding SelectedSalesperson}" AutoGenerateColumns="False" IsReadOnly="True" Margin="5">
                             <DataGrid.Columns>
                                 <DataGridTextColumn Header="ID" Binding="{Binding SalespersonId}" Width="50"/>
                                 <DataGridTextColumn Header="First Name" Binding="{Binding FirstName}" Width="*"/>
                                 <DataGridTextColumn Header="Last Name" Binding="{Binding LastName}" Width="*"/>
                                 <DataGridTextColumn Header="Email" Binding="{Binding Email}" Width="1.5*"/>
-                                <DataGridCheckBoxColumn Header="Is Primary" Binding="{Binding IsPrimary}" Width="80"/>
+
+                                <DataGridTemplateColumn Header="Is Primary" Width="90">
+                                    <DataGridTemplateColumn.CellTemplate>
+                                        <DataTemplate>
+                                            <Button Command="{Binding DataContext.TogglePrimaryCommand, RelativeSource={RelativeSource AncestorType=DataGrid}}"
+                                                CommandParameter="{Binding}"
+                                                Background="Transparent" 
+                                                BorderThickness="0" 
+                                                Cursor="Hand">
+                                                <CheckBox IsChecked="{Binding IsPrimary, Mode=OneWay}" 
+                                                      IsHitTestVisible="False" 
+                                                      HorizontalAlignment="Center" 
+                                                      VerticalAlignment="Center"/>
+                                            </Button>
+                                        </DataTemplate>
+                                    </DataGridTemplateColumn.CellTemplate>
+                                </DataGridTemplateColumn>
                             </DataGrid.Columns>
                         </DataGrid>
                     </DockPanel>

@@ -27,15 +27,15 @@ public class ExceptionHandlingMiddleware
             _logger.LogWarning(ex, "Domain validation failure.");
             await WriteErrorResponseAsync(context, HttpStatusCode.BadRequest, ex.Message);
         }
-        catch (SqlException ex) when (ex.Number is 2601 or 2627)
+        catch (SqlException ex)
         {
-            _logger.LogError(ex, "SQL Unique Constraint Violation.");
-            await WriteErrorResponseAsync(context, HttpStatusCode.Conflict, "A primary salesperson conflict occurred.");
+            _logger.LogError(ex, "SQL Exception encountered: {Message}", ex.Message);
+            await WriteErrorResponseAsync(context, HttpStatusCode.InternalServerError, $"SQL Error: {ex.Message}");
         }
         catch (Exception ex)
         {
-            _logger.LogCritical(ex, "Unhandled exception encountered during request processing.");
-            await WriteErrorResponseAsync(context, HttpStatusCode.InternalServerError, "An unexpected server error occurred.");
+            _logger.LogCritical(ex, "Unhandled exception encountered.");
+            await WriteErrorResponseAsync(context, HttpStatusCode.InternalServerError, ex.Message);
         }
     }
 

@@ -111,6 +111,7 @@ GO
 -- 3. TRIGGERS: MANDATORY SINGLE PRIMARY ENFORCEMENT
 -- ============================================================================
 
+-- Enforce Minimum 1 Primary Salesperson Per District (Trigger)
 CREATE OR ALTER TRIGGER dbo.trg_EnforceSinglePrimaryPerDistrict
 ON dbo.DistrictSalesperson
 AFTER UPDATE, DELETE
@@ -118,13 +119,21 @@ AS
 BEGIN
     SET NOCOUNT ON;
 
-    -- Check if any affected district is left without exactly ONE primary salesperson
+    -- Ignore if no rows were affected
+    IF NOT EXISTS (SELECT 1 FROM inserted) AND NOT EXISTS (SELECT 1 FROM deleted)
+        RETURN;
+
+    -- Check if any affected district has 0 primary salespersons after the statement completes
     IF EXISTS (
         SELECT d.DistrictId
         FROM dbo.District d
         LEFT JOIN dbo.DistrictSalesperson ds 
             ON d.DistrictId = ds.DistrictId AND ds.IsPrimary = 1
-        WHERE d.DistrictId IN (SELECT DistrictId FROM deleted)
+        WHERE d.DistrictId IN (
+            SELECT DistrictId FROM inserted
+            UNION
+            SELECT DistrictId FROM deleted
+        )
         GROUP BY d.DistrictId
         HAVING COUNT(ds.SalespersonId) = 0
     )
@@ -151,43 +160,57 @@ CREATE OR ALTER PROCEDURE dbo.sp_AssignSalespersonToDistrict
 AS
 BEGIN
     SET NOCOUNT ON;
-    
+
     BEGIN TRANSACTION;
     BEGIN TRY
-        -- Guard Clause: Prevent demoting the primary salesperson if no replacement is specified
-        IF @IsPrimary = 0
+        -- Guard 1: Verify District and Salesperson exist
+        IF NOT EXISTS (SELECT 1 FROM dbo.District WHERE DistrictId = @DistrictId)
         BEGIN
-            IF EXISTS (
-                SELECT 1 
-                FROM dbo.DistrictSalesperson 
-                WHERE DistrictId = @DistrictId 
-                  AND SalespersonId = @SalespersonId 
-                  AND IsPrimary = 1
-            )
-            BEGIN
-                RAISERROR ('Cannot demote the primary salesperson. Assign another salesperson as primary first to swap roles.', 16, 1);
-                ROLLBACK TRANSACTION;
-                RETURN;
-            END
+            RAISERROR ('Invalid District ID.', 16, 1);
+            ROLLBACK TRANSACTION;
+            RETURN;
         END
 
-        -- If promoting to Primary, demote the current primary salesperson for this district
+        IF NOT EXISTS (SELECT 1 FROM dbo.Salesperson WHERE SalespersonId = @SalespersonId)
+        BEGIN
+            RAISERROR ('Invalid Salesperson ID.', 16, 1);
+            ROLLBACK TRANSACTION;
+            RETURN;
+        END
+
+        -- Guard 2: Prevent demoting primary salesperson directly without promoting another
+        IF @IsPrimary = 0 AND EXISTS (
+            SELECT 1 FROM dbo.DistrictSalesperson 
+            WHERE DistrictId = @DistrictId AND SalespersonId = @SalespersonId AND IsPrimary = 1
+        )
+        BEGIN
+            RAISERROR ('Cannot demote primary salesperson directly. Assign another salesperson as primary to swap roles.', 16, 1);
+            ROLLBACK TRANSACTION;
+            RETURN;
+        END
+
+        -- Step 1: Ensure target salesperson exists in the district table
+        IF NOT EXISTS (
+            SELECT 1 FROM dbo.DistrictSalesperson 
+            WHERE DistrictId = @DistrictId AND SalespersonId = @SalespersonId
+        )
+        BEGIN
+            INSERT INTO dbo.DistrictSalesperson (DistrictId, SalespersonId, IsPrimary, AssignedUtc)
+            VALUES (@DistrictId, @SalespersonId, 0, SYSUTCDATETIME());
+        END
+
+        -- Step 2: Atomic Swap in 1 single UPDATE query
         IF @IsPrimary = 1
         BEGIN
             UPDATE dbo.DistrictSalesperson
-            SET IsPrimary = 0
-            WHERE DistrictId = @DistrictId AND IsPrimary = 1;
+            SET IsPrimary = CASE 
+                    WHEN SalespersonId = @SalespersonId THEN 1 
+                    ELSE 0 
+                END,
+                AssignedUtc = SYSUTCDATETIME()
+            WHERE DistrictId = @DistrictId 
+              AND (SalespersonId = @SalespersonId OR IsPrimary = 1);
         END
-
-        -- Upsert (Insert or Update) the target salesperson assignment
-        MERGE dbo.DistrictSalesperson AS target
-        USING (SELECT @DistrictId AS DistrictId, @SalespersonId AS SalespersonId) AS source
-        ON (target.DistrictId = source.DistrictId AND target.SalespersonId = source.SalespersonId)
-        WHEN MATCHED THEN
-            UPDATE SET IsPrimary = @IsPrimary
-        WHEN NOT MATCHED THEN
-            INSERT (DistrictId, SalespersonId, IsPrimary)
-            VALUES (source.DistrictId, source.SalespersonId, @IsPrimary);
 
         COMMIT TRANSACTION;
     END TRY

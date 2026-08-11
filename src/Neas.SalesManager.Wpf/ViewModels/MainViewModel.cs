@@ -98,6 +98,7 @@ public class MainViewModel : ViewModelBase
     public ICommand RefreshCommand { get; }
     public ICommand AssignSalespersonCommand { get; }
     public ICommand RemoveSalespersonCommand { get; }
+    public ICommand TogglePrimaryCommand { get; }
 
     public MainViewModel(ISalesApiClient apiClient, IDialogService dialogService)
     {
@@ -108,6 +109,7 @@ public class MainViewModel : ViewModelBase
         RefreshCommand = new AsyncRelayCommand(LoadInitialDataAsync);
         AssignSalespersonCommand = new AsyncRelayCommand(AssignSalespersonAsync, () => SelectedDistrict != null);
         RemoveSalespersonCommand = new AsyncRelayCommand(RemoveSalespersonAsync, () => SelectedSalesperson != null);
+        TogglePrimaryCommand = new AsyncRelayCommand<Salesperson>(TogglePrimarySalespersonAsync);
 
         _ = LoadInitialDataAsync(); 
     }
@@ -194,16 +196,47 @@ public class MainViewModel : ViewModelBase
         }
     }
 
+    private async Task TogglePrimarySalespersonAsync(Salesperson? clickedSalesperson)
+    {
+        if (SelectedDistrict == null || clickedSalesperson == null) return;
+
+        // If already primary, do nothing (every district must maintain 1 primary)
+        if (clickedSalesperson.IsPrimary) return;
+
+        try
+        {
+            StatusMessage = $"Promoting {clickedSalesperson.FirstName} {clickedSalesperson.LastName} to Primary...";
+
+            // 1. Call API to set this salesperson as Primary (DB procedure will demote the previous primary)
+            await _apiClient.AssignSalespersonAsync(
+                SelectedDistrict.DistrictId,
+                clickedSalesperson.SalespersonId,
+                isPrimary: true
+            );
+
+            // 2. Reload District Details from API so the DataGrid refreshes with the new roles
+            await LoadDistrictDetailsAsync();
+
+            StatusMessage = $"{clickedSalesperson.FirstName} {clickedSalesperson.LastName} is now the primary salesperson.";
+        }
+        catch (Exception ex)
+        {
+            await LoadDistrictDetailsAsync(); // Reset grid state on failure
+            StatusMessage = "Failed to update primary salesperson.";
+            _dialogService.ShowError(ex.Message, "Assignment Conflict / Error");
+        }
+    }
+
     private async Task AssignSalespersonAsync()
     {
         if (SelectedDistrict == null || SelectedSalespersonToAssign == null) return;
 
-        // Check if user is trying to uncheck 'Is Primary' on the current Primary Salesperson
+        // Check if user attempts to uncheck Primary on the current primary salesperson
         var currentPrimary = Salespersons.FirstOrDefault(sp => sp.IsPrimary);
         if (!IsPrimaryAssign && currentPrimary != null && currentPrimary.SalespersonId == SelectedSalespersonToAssign.SalespersonId)
         {
             _dialogService.ShowWarning(
-                $"'{currentPrimary.FirstName} {currentPrimary.LastName}' is currently the Primary Salesperson.\n\nEvery district must have a primary salesperson. To change the primary salesperson, select a new salesperson and check 'Set as Primary Salesperson'.",
+                $"'{currentPrimary.FirstName} {currentPrimary.LastName}' is currently the Primary Salesperson.\n\nEvery district must have a primary salesperson. Assign another salesperson as primary to swap roles.",
                 "Cannot Remove Primary Status"
             );
             return;
@@ -219,7 +252,7 @@ public class MainViewModel : ViewModelBase
             );
 
             await LoadDistrictDetailsAsync();
-            StatusMessage = "Salesperson assigned successfully.";
+            StatusMessage = "Salesperson assignment updated successfully.";
         }
         catch (Exception ex)
         {
