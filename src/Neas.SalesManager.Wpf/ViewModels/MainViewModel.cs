@@ -168,9 +168,19 @@ public class MainViewModel : ViewModelBase
     {
         if (SelectedDistrict == null || SelectedSalesperson == null) return;
 
+        // Client-side Guard Clause
+        if (SelectedSalesperson.IsPrimary)
+        {
+            _dialogService.ShowWarning(
+                $"'{SelectedSalesperson.FirstName} {SelectedSalesperson.LastName}' is currently the Primary Salesperson for this district.\n\nTo ensure continuity, please assign another primary salesperson before removing this one.",
+                "Cannot Remove Primary Salesperson"
+            );
+            return;
+        }
+
         try
         {
-            StatusMessage = $"Removing salesperson {SelectedSalesperson.FirstName}...";
+            StatusMessage = $"Removing {SelectedSalesperson.FirstName}...";
             await _apiClient.RemoveSalespersonAsync(SelectedDistrict.DistrictId, SelectedSalesperson.SalespersonId);
 
             await LoadDistrictDetailsAsync();
@@ -179,7 +189,7 @@ public class MainViewModel : ViewModelBase
         catch (Exception ex)
         {
             StatusMessage = "Removal failed.";
-            MessageBox.Show($"Error removing salesperson: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            _dialogService.ShowError($"Error removing salesperson: {ex.Message}", "Removal Error");
         }
     }
 }

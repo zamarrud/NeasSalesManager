@@ -72,11 +72,25 @@ public class DistrictRepository : IDistrictRepository
 
     public async Task RemoveSalespersonAsync(int districtId, int salespersonId)
     {
-        const string sql = @"
-            DELETE FROM dbo.DistrictSalesperson 
-            WHERE DistrictId = @DistrictId AND SalespersonId = @SalespersonId;";
-
         using var connection = new SqlConnection(_connectionString);
-        await connection.ExecuteAsync(sql, new { DistrictId = districtId, SalespersonId = salespersonId });
+
+        // Business Rule Guard: Check if the salesperson is the primary before removing
+        const string checkSql = @"
+        SELECT IsPrimary 
+        FROM dbo.DistrictSalesperson 
+        WHERE DistrictId = @DistrictId AND SalespersonId = @SalespersonId;";
+
+        var isPrimary = await connection.ExecuteScalarAsync<bool?>(checkSql, new { DistrictId = districtId, SalespersonId = salespersonId });
+
+        if (isPrimary == true)
+        {
+            throw new InvalidOperationException("Cannot remove the primary salesperson from a district. Please assign a new primary salesperson first.");
+        }
+
+        const string deleteSql = @"
+        DELETE FROM dbo.DistrictSalesperson 
+        WHERE DistrictId = @DistrictId AND SalespersonId = @SalespersonId;";
+
+        await connection.ExecuteAsync(deleteSql, new { DistrictId = districtId, SalespersonId = salespersonId });
     }
 }

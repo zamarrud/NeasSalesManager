@@ -194,6 +194,58 @@ public class MainViewModelTests
         Assert.Equal("Assignment failed.", viewModel.StatusMessage);
     }
 
+    [Fact]
+    public async Task AssignSalespersonCommand_ReassignsPrimary_WhenIsPrimaryAssignIsTrue()
+    {
+        // Arrange: District currently has John Doe (ID 1) as Primary
+        var district = new DistrictSummary(1, "Copenhagen Central");
+        var detailsBefore = new DistrictDetails(
+            1,
+            "Copenhagen Central",
+            new List<Salesperson> { new(1, "John", "Doe", "john@neas.dk", true) },
+            new()
+        );
+
+        // Details after primary swap: Michael Nygreen (ID 5) is Primary, John Doe is Secondary
+        var detailsAfter = new DistrictDetails(
+            1,
+            "Copenhagen Central",
+            new List<Salesperson>
+            {
+                new(1, "John", "Doe", "john@neas.dk", false),
+                new(5, "Michael", "Nygreen", "michael@neas.dk", true)
+            },
+            new()
+        );
+
+        _apiClientMock.Setup(x => x.GetDistrictsAsync()).ReturnsAsync(new List<DistrictSummary> { district });
+        _apiClientMock.SetupSequence(x => x.GetDistrictDetailsAsync(1))
+            .ReturnsAsync(detailsBefore)
+            .ReturnsAsync(detailsAfter);
+
+        _apiClientMock.Setup(x => x.AssignSalespersonAsync(1, 5, true)).Returns(Task.CompletedTask);
+
+        var viewModel = new MainViewModel(_apiClientMock.Object, _dialogServiceMock.Object);
+        await Task.Delay(150);
+
+        // Select Michael Nygreen and check "Is Primary"
+        viewModel.SelectedSalespersonToAssign = _mockSystemSalespersons.First(sp => sp.SalespersonId == 5);
+        viewModel.IsPrimaryAssign = true;
+
+        // Act
+        viewModel.AssignSalespersonCommand.Execute(null);
+        await Task.Delay(150);
+
+        // Assert
+        _apiClientMock.Verify(x => x.AssignSalespersonAsync(1, 5, true), Times.Once);
+        Assert.Equal(2, viewModel.Salespersons.Count);
+
+        var newPrimary = viewModel.Salespersons.First(sp => sp.IsPrimary);
+        Assert.Equal(5, newPrimary.SalespersonId);
+        Assert.Equal("Michael", newPrimary.FirstName);
+        Assert.Equal("Salesperson assigned successfully.", viewModel.StatusMessage);
+    }
+
     #endregion
 
     #region Remove Salesperson Tests
@@ -227,6 +279,66 @@ public class MainViewModelTests
         // Assert
         _apiClientMock.Verify(x => x.RemoveSalespersonAsync(1, 10), Times.Once);
         Assert.Empty(viewModel.Salespersons);
+        Assert.Equal("Salesperson removed successfully.", viewModel.StatusMessage);
+    }
+
+    [Fact]
+    public async Task RemoveSalespersonCommand_ShowsWarningDialogAndAborts_WhenSalespersonIsPrimary()
+    {
+        // Arrange
+        var district = new DistrictSummary(1, "Copenhagen Central");
+        var primarySalesperson = new Salesperson(1, "John", "Doe", "john@neas.dk", true); // IsPrimary = true
+
+        var details = new DistrictDetails(1, "Copenhagen Central", new List<Salesperson> { primarySalesperson }, new());
+
+        _apiClientMock.Setup(x => x.GetDistrictsAsync()).ReturnsAsync(new List<DistrictSummary> { district });
+        _apiClientMock.Setup(x => x.GetDistrictDetailsAsync(1)).ReturnsAsync(details);
+
+        var viewModel = new MainViewModel(_apiClientMock.Object, _dialogServiceMock.Object);
+        await Task.Delay(150);
+
+        viewModel.SelectedSalesperson = primarySalesperson;
+
+        // Act
+        viewModel.RemoveSalespersonCommand.Execute(null);
+        await Task.Delay(150);
+
+        // Assert: Verify API remove was NEVER called and warning dialog WAS shown
+        _apiClientMock.Verify(x => x.RemoveSalespersonAsync(It.IsAny<int>(), It.IsAny<int>()), Times.Never);
+        _dialogServiceMock.Verify(x => x.ShowWarning(It.Is<string>(s => s.Contains("is currently the Primary Salesperson")), "Cannot Remove Primary Salesperson"), Times.Once);
+    }
+
+    [Fact]
+    public async Task RemoveSalespersonCommand_CallsApiAndReloads_WhenSalespersonIsSecondary()
+    {
+        // Arrange
+        var district = new DistrictSummary(1, "Copenhagen Central");
+        var primarySalesperson = new Salesperson(1, "John", "Doe", "john@neas.dk", true);
+        var secondarySalesperson = new Salesperson(2, "Jane", "Smith", "jane@neas.dk", false); // IsPrimary = false
+
+        var detailsWithBoth = new DistrictDetails(1, "Copenhagen", new List<Salesperson> { primarySalesperson, secondarySalesperson }, new());
+        var detailsAfterRemoval = new DistrictDetails(1, "Copenhagen", new List<Salesperson> { primarySalesperson }, new());
+
+        _apiClientMock.Setup(x => x.GetDistrictsAsync()).ReturnsAsync(new List<DistrictSummary> { district });
+        _apiClientMock.SetupSequence(x => x.GetDistrictDetailsAsync(1))
+            .ReturnsAsync(detailsWithBoth)
+            .ReturnsAsync(detailsAfterRemoval);
+
+        _apiClientMock.Setup(x => x.RemoveSalespersonAsync(1, 2)).Returns(Task.CompletedTask);
+
+        var viewModel = new MainViewModel(_apiClientMock.Object, _dialogServiceMock.Object);
+        await Task.Delay(150);
+
+        viewModel.SelectedSalesperson = secondarySalesperson;
+
+        // Act
+        viewModel.RemoveSalespersonCommand.Execute(null);
+        await Task.Delay(150);
+
+        // Assert
+        _apiClientMock.Verify(x => x.RemoveSalespersonAsync(1, 2), Times.Once);
+        Assert.Single(viewModel.Salespersons);
+        Assert.True(viewModel.Salespersons[0].IsPrimary);
         Assert.Equal("Salesperson removed successfully.", viewModel.StatusMessage);
     }
 

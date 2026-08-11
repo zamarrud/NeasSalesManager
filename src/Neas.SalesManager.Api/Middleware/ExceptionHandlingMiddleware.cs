@@ -22,11 +22,15 @@ public class ExceptionHandlingMiddleware
         {
             await _next(context);
         }
+        catch (InvalidOperationException ex)
+        {
+            _logger.LogWarning(ex, "Domain validation failure.");
+            await WriteErrorResponseAsync(context, HttpStatusCode.BadRequest, ex.Message);
+        }
         catch (SqlException ex) when (ex.Number is 2601 or 2627)
         {
-            // Catches Filtered Unique Index violation (UX_DistrictSalesperson_SinglePrimary)
-            _logger.LogError(ex, "SQL Unique Constraint Violation: Duplicate entry or primary assignment conflict.");
-            await WriteErrorResponseAsync(context, HttpStatusCode.Conflict, "A primary salesperson is already assigned or duplicate entry exists.");
+            _logger.LogError(ex, "SQL Unique Constraint Violation.");
+            await WriteErrorResponseAsync(context, HttpStatusCode.Conflict, "A primary salesperson conflict occurred.");
         }
         catch (Exception ex)
         {

@@ -116,52 +116,38 @@ GO
 -- Handles primary assignment toggles atomically inside an explicit transaction
 -- ----------------------------------------------------------------------------
 CREATE PROCEDURE dbo.sp_AssignSalespersonToDistrict
-    @DistrictId    INT,
+        @DistrictId INT,
     @SalespersonId INT,
-    @IsPrimary     BIT
+    @IsPrimary BIT
 AS
 BEGIN
     SET NOCOUNT ON;
-    SET XACT_ABORT ON;
-
+    
+    BEGIN TRANSACTION;
     BEGIN TRY
-        BEGIN TRANSACTION;
-
-        -- Check if District and Salesperson exist
-        IF NOT EXISTS (SELECT 1 FROM dbo.District WHERE DistrictId = @DistrictId)
-        BEGIN
-            RAISERROR('District with ID %d does not exist.', 16, 1, @DistrictId);
-        END
-
-        IF NOT EXISTS (SELECT 1 FROM dbo.Salesperson WHERE SalespersonId = @SalespersonId)
-        BEGIN
-            RAISERROR('Salesperson with ID %d does not exist.', 16, 1, @SalespersonId);
-        END
-
-        -- If promoting to Primary, unset existing primary salesperson for this district
+        -- 1. If promoting to Primary, demote the current primary salesperson for this district
         IF @IsPrimary = 1
         BEGIN
-            UPDATE dbo.DistrictSalesperson 
-            SET IsPrimary = 0 
+            UPDATE dbo.DistrictSalesperson
+            SET IsPrimary = 0
             WHERE DistrictId = @DistrictId AND IsPrimary = 1;
         END
 
-        -- Atomic Upsert using MERGE
-        MERGE INTO dbo.DistrictSalesperson AS Target
-        USING (SELECT @DistrictId AS DistrictId, @SalespersonId AS SalespersonId) AS Source
-        ON Target.DistrictId = Source.DistrictId AND Target.SalespersonId = Source.SalespersonId
+        -- 2. Upsert (Insert or Update) the target salesperson assignment
+        MERGE dbo.DistrictSalesperson AS target
+        USING (SELECT @DistrictId AS DistrictId, @SalespersonId AS SalespersonId) AS source
+        ON (target.DistrictId = source.DistrictId AND target.SalespersonId = source.SalespersonId)
         WHEN MATCHED THEN
-            UPDATE SET IsPrimary = @IsPrimary, AssignedUtc = GETUTCDATE()
+            UPDATE SET IsPrimary = @IsPrimary
         WHEN NOT MATCHED THEN
-            INSERT (DistrictId, SalespersonId, IsPrimary, AssignedUtc)
-            VALUES (@DistrictId, @SalespersonId, @IsPrimary, GETUTCDATE());
+            INSERT (DistrictId, SalespersonId, IsPrimary)
+            VALUES (source.DistrictId, source.SalespersonId, @IsPrimary);
 
         COMMIT TRANSACTION;
     END TRY
     BEGIN CATCH
         IF @@TRANCOUNT > 0
             ROLLBACK TRANSACTION;
-
         THROW;
     END CATCH
 END;
