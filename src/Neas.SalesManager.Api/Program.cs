@@ -1,5 +1,6 @@
 // src/Neas.SalesManager.Api/Program.cs
 using Neas.SalesManager.Api.Data;
+using Neas.SalesManager.Api.Hubs;
 using Neas.SalesManager.Api.Middleware;
 using Serilog;
 using Serilog.Sinks.Elasticsearch;
@@ -30,7 +31,7 @@ builder.Services.AddScoped<ISalespersonRepository, SalespersonRepository>();
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
-
+builder.Services.AddSignalR();
 
 
 var app = builder.Build();
@@ -46,8 +47,12 @@ app.UseSwaggerUI(c =>
     c.RoutePrefix = "swagger";
 });
 
+app.UseRouting();
 app.UseHttpsRedirection();
 app.UseAuthorization();
 app.MapControllers();
+
+// Map SignalR Hub endpoint
+app.MapHub<SalesManagerHub>("/hubs/salesmanager");
 
 app.Run();

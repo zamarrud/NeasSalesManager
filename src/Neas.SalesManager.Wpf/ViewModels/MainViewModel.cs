@@ -1,4 +1,8 @@
-﻿using System.Collections.ObjectModel;
+﻿using System;
+using System.Collections.Generic;
+using System.Collections.ObjectModel;
+using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Input;
 using Neas.SalesManager.Wpf.Models;
@@ -10,14 +14,13 @@ public class MainViewModel : ViewModelBase
 {
     private readonly ISalesApiClient _apiClient;
     private readonly IDialogService _dialogService;
+    private readonly INotificationService _notificationService;
 
     public ObservableCollection<DistrictSummary> Districts { get; } = new();
     public ObservableCollection<Store> Stores { get; } = new();
-    public ObservableCollection<Salesperson> Salespersons { get; } = new();    
-    // 1. Add new ObservableCollection for the dropdown items
+    public ObservableCollection<Salesperson> Salespersons { get; } = new();        
     public ObservableCollection<Salesperson> AvailableSalespersons { get; } = new();
-    //public ObservableCollection<Salesperson> AssignableSalespersons => new();
-
+    
     // Clean Filtered Property: Returns ONLY unassigned salespersons (or empty if all are assigned)
     public IEnumerable<Salesperson> AssignableSalespersons
     {
@@ -83,22 +86,6 @@ public class MainViewModel : ViewModelBase
         }
     }
 
-    // Command CanExecute Guard: Disable "Assign Salesperson" button when no unassigned salesperson remains
-    private bool CanAssignSalesperson()
-    {
-        return SelectedDistrict != null
-            && SelectedSalespersonToAssign != null
-            && AssignableSalespersons.Any();
-    }
-
-    // CanExecute predicate
-    private bool CanRemoveSalesperson()
-    {
-        // Enable button ONLY when a secondary salesperson is selected
-        return SelectedSalesperson != null && !SelectedSalesperson.IsPrimary;
-    }
-
-    // 2. Add property for the selected salesperson in the dropdown
     private Salesperson? _selectedSalespersonToAssign;
     public Salesperson? SelectedSalespersonToAssign
     {
@@ -124,7 +111,6 @@ public class MainViewModel : ViewModelBase
         get => _statusMessage;
         set { _statusMessage = value; OnPropertyChanged(); }
     }
-         
 
     public ICommand CreateDistrictCommand { get; }
     public ICommand RefreshCommand { get; }
@@ -132,18 +118,50 @@ public class MainViewModel : ViewModelBase
     public ICommand RemoveSalespersonCommand { get; }
     public ICommand TogglePrimaryCommand { get; }
 
-    public MainViewModel(ISalesApiClient apiClient, IDialogService dialogService)
+    public MainViewModel(
+            ISalesApiClient apiClient, 
+            IDialogService dialogService, 
+            INotificationService notificationService)
     {
         _apiClient = apiClient;
         _dialogService = dialogService;
+        _notificationService = notificationService;
 
         CreateDistrictCommand = new AsyncRelayCommand(CreateDistrictAsync, () => !string.IsNullOrWhiteSpace(NewDistrictName) && SelectedPrimaryForNewDistrict != null);
         RefreshCommand = new AsyncRelayCommand(LoadInitialDataAsync);
-        AssignSalespersonCommand = new AsyncRelayCommand(AssignSalespersonAsync, () => SelectedDistrict != null);
+        //AssignSalespersonCommand = new AsyncRelayCommand(AssignSalespersonAsync, () => SelectedDistrict != null);
+        AssignSalespersonCommand = new AsyncRelayCommand(AssignSalespersonAsync, CanAssignSalesperson);
         RemoveSalespersonCommand = new AsyncRelayCommand(RemoveSalespersonAsync, CanRemoveSalesperson);
-        TogglePrimaryCommand = new AsyncRelayCommand<Salesperson>(TogglePrimarySalespersonAsync);        
+        TogglePrimaryCommand = new AsyncRelayCommand<Salesperson>(TogglePrimarySalespersonAsync);
 
-        _ = LoadInitialDataAsync(); 
+        // Subscribe to real-time notification with UI Dispatcher marshalling
+        _notificationService.OnDistrictUpdated += (districtId) =>
+        {
+            Application.Current?.Dispatcher.InvokeAsync(async () =>
+            {
+                await LoadDistrictsAsync1();
+                if (SelectedDistrict != null && SelectedDistrict.DistrictId == districtId)
+                {
+                    await LoadDistrictDetailsAsync();
+                }
+            });
+        };
+
+        _ = LoadInitialDataAsync();
+        _ = InitializeNotificationsAsync();
+    }
+
+    private bool CanAssignSalesperson()
+    {
+        return SelectedDistrict != null
+            && SelectedSalespersonToAssign != null
+            && AssignableSalespersons.Any();
+    }
+
+    private bool CanRemoveSalesperson()
+    {
+        // Enable button ONLY when a secondary salesperson is selected
+        return SelectedSalesperson != null && !SelectedSalesperson.IsPrimary;
     }
 
     public async Task LoadInitialDataAsync()
@@ -151,29 +169,14 @@ public class MainViewModel : ViewModelBase
         try
         {
             StatusMessage = "Loading data...";
-
-            // Load all system salespersons
+                        
             var allSalespersons = await _apiClient.GetAllSalespersonsAsync();
             AvailableSalespersons.Clear();
             foreach (var sp in allSalespersons) AvailableSalespersons.Add(sp);                        
-
-            // Set default selection for Create New District ComboBox
+                        
             SelectedPrimaryForNewDistrict = AvailableSalespersons.FirstOrDefault();
 
-            // Load Districts
-            Districts.Clear();
-            var districtsList = await _apiClient.GetDistrictsAsync();
-            foreach (var d in districtsList) Districts.Add(d);
-
-            // Select first district
-            if (Districts.Any() && SelectedDistrict == null)
-            {
-                SelectedDistrict = Districts.First();
-            }
-            else if (SelectedDistrict != null)
-            {
-                await LoadDistrictDetailsAsync();
-            }
+            await LoadDistrictsAsync();
 
             StatusMessage = "Data loaded successfully.";
         }
@@ -182,6 +185,42 @@ public class MainViewModel : ViewModelBase
             StatusMessage = "Failed to load system data.";
             _dialogService.ShowError($"Error loading salespersons: {ex.Message}", "Initialization Error");
         }
+    }
+
+    public async Task LoadDistrictsAsync()
+    {
+        try
+        {
+            var currentSelectedId = SelectedDistrict?.DistrictId;
+            var districtsList = await _apiClient.GetDistrictsAsync();
+
+            Districts.Clear();
+            foreach (var d in districtsList)
+            {
+                Districts.Add(d);
+            }
+
+            // Preserve selection or auto-select first item
+            if (currentSelectedId.HasValue)
+            {
+                SelectedDistrict = Districts.FirstOrDefault(d => d.DistrictId == currentSelectedId.Value)
+                                   ?? Districts.FirstOrDefault();
+            }
+            else
+            {
+                SelectedDistrict = Districts.FirstOrDefault();
+            }
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = "Failed to refresh districts.";
+        }
+    }
+
+    public async Task LoadDistrictsAsync1()
+    {
+        var districts = await _apiClient.GetDistrictsAsync();
+        // Update UI collection
     }
 
     // Update District Details and Refresh the Dropdown List
@@ -210,15 +249,12 @@ public class MainViewModel : ViewModelBase
                     Stores.Add(st);
                 }
             }
-
-            // Notify UI to re-evaluate AssignableSalespersons and refresh ComboBox
+                        
             OnPropertyChanged(nameof(AssignableSalespersons));
-
-            // Auto-select the first item in the refreshed list
             SelectedSalespersonToAssign = AssignableSalespersons.FirstOrDefault();
 
-            // Re-evaluate command CanExecute
             (AssignSalespersonCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
+            (RemoveSalespersonCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         }
         catch (Exception ex)
         {
@@ -227,6 +263,18 @@ public class MainViewModel : ViewModelBase
         }
     }
 
+    private async Task InitializeNotificationsAsync()
+    {
+        try
+        {
+            await _notificationService.StartAsync();
+        }
+        catch (Exception ex)
+        {
+            // Log or handle initial connection error gracefully
+        }
+    }
+    
     public async Task CreateDistrictAsync()
     {
         if (string.IsNullOrWhiteSpace(NewDistrictName) || SelectedPrimaryForNewDistrict == null) return;
@@ -315,39 +363,11 @@ public class MainViewModel : ViewModelBase
             _dialogService.ShowError(ex.Message, "Assignment Conflict / Error");
         }
     }
-      
-    //private void UpdateAssignableSalespersons()
-    //{
-    //    // Detach selection first so WPF doesn't clear the property unexpectedly
-    //    SelectedSalespersonToAssign = null;
-    //    AssignableSalespersons.Clear();
-
-    //    // If no salespersons exist in the system yet, exit safely
-    //    if (AvailableSalespersons == null || !AvailableSalespersons.Any())
-    //        return;
-
-    //    // Get set of IDs currently assigned to the selected district
-    //    var assignedIds = Salespersons.Select(s => s.SalespersonId).ToHashSet();
-
-    //    // Populate only unassigned salespersons
-    //    foreach (var sp in AvailableSalespersons)
-    //    {
-    //        if (!assignedIds.Contains(sp.SalespersonId))
-    //        {
-    //            AssignableSalespersons.Add(sp);
-    //        }
-    //    }
-
-    //    // Auto-select the first unassigned salesperson in the dropdown
-    //    SelectedSalespersonToAssign = AssignableSalespersons.FirstOrDefault();
-    //    OnPropertyChanged(nameof(SelectedSalespersonToAssign));
-    //}
 
     private async Task RemoveSalespersonAsync()
     {
         if (SelectedDistrict == null || SelectedSalesperson == null) return;
-
-        // Client-side Guard Clause
+               
         if (SelectedSalesperson.IsPrimary)
         {
             _dialogService.ShowWarning(

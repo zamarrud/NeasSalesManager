@@ -22,7 +22,8 @@ public partial class App : Application
         });
 
         services.AddSingleton<IDialogService, DialogService>();
-        services.AddSingleton<MainViewModel>();
+        services.AddSingleton<INotificationService, NotificationService>();
+        services.AddTransient<MainViewModel>();
         services.AddSingleton<MainWindow>();
 
         _serviceProvider = services.BuildServiceProvider();

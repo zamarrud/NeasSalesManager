@@ -1,6 +1,11 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.Logging;
 using Neas.SalesManager.Api.Data;
 using Neas.SalesManager.Api.DTOs;
+using Neas.SalesManager.Api.Hubs;
+using System.Threading.Tasks;
 
 namespace Neas.SalesManager.Api.Controllers;
 
@@ -11,11 +16,16 @@ public class DistrictsController : ControllerBase
 {
     private readonly IDistrictRepository _repository;
     private readonly ILogger<DistrictsController> _logger;
+    private readonly IHubContext<SalesManagerHub> _hubContext;
 
-    public DistrictsController(IDistrictRepository repository, ILogger<DistrictsController> logger)
+    public DistrictsController(
+        IDistrictRepository repository, 
+        ILogger<DistrictsController> logger,
+        IHubContext<SalesManagerHub> hubContext)
     {
         _repository = repository;
         _logger = logger;
+        _hubContext = hubContext;
     }
 
     /// <summary>
@@ -67,7 +77,9 @@ public class DistrictsController : ControllerBase
             request.SalespersonId, districtId, request.IsPrimary
         );
 
-        // Commandment 2 & Unit Test Spec: Returns 204 No Content
+        // Send event notification via SignalR
+        await _hubContext.Clients.All.SendAsync("DistrictUpdated", districtId);
+
         return NoContent();
     }
 
@@ -82,6 +94,10 @@ public class DistrictsController : ControllerBase
         }
 
         var newDistrictId = await _repository.CreateDistrictAsync(request.Name, request.PrimarySalespersonId);
+
+        // MUST broadcast creation to all clients
+        await _hubContext.Clients.All.SendAsync("DistrictUpdated", newDistrictId);
+
         return CreatedAtAction(nameof(GetDistrictDetails), new { id = newDistrictId }, new { DistrictId = newDistrictId, Name = request.Name });
     }
 
@@ -95,6 +111,9 @@ public class DistrictsController : ControllerBase
             "Removed Salesperson {SalespersonId} from District {DistrictId}",
             salespersonId, districtId
         );
+
+        // Send event notification via SignalR
+        await _hubContext.Clients.All.SendAsync("DistrictUpdated", districtId);
 
         return NoContent();
     }

@@ -1,5 +1,7 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR; 
+using Neas.SalesManager.Api.Hubs;
 using Microsoft.Extensions.Logging;
 using Moq;
 using Neas.SalesManager.Api.Controllers;
@@ -13,13 +15,22 @@ public class DistrictsControllerTests
 {
     private readonly Mock<IDistrictRepository> _mockRepo;
     private readonly Mock<ILogger<DistrictsController>> _mockLogger;
+    private readonly Mock<IHubContext<SalesManagerHub>> _mockHubContext;
     private readonly DistrictsController _controller;
 
     public DistrictsControllerTests()
     {
         _mockRepo = new Mock<IDistrictRepository>();
         _mockLogger = new Mock<ILogger<DistrictsController>>();
-        _controller = new DistrictsController(_mockRepo.Object, _mockLogger.Object);
+        _mockHubContext = new Mock<IHubContext<SalesManagerHub>>();
+
+        // Mock nested SignalR Clients setup so .SendAsync calls do not throw NullReferenceException
+        var mockClients = new Mock<IHubClients>();
+        var mockClientProxy = new Mock<ISingleClientProxy>();
+
+        _mockHubContext.Setup(h => h.Clients).Returns(mockClients.Object);
+        mockClients.Setup(c => c.All).Returns(mockClientProxy.Object);
+        _controller = new DistrictsController(_mockRepo.Object, _mockLogger.Object, _mockHubContext.Object);
     }
 
     [Fact]
