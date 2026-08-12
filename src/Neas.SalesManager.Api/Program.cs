@@ -23,13 +23,15 @@ builder.Host.UseSerilog((context, configuration) =>
         });
 });
 
-// 2. Framework Services
+builder.Services.AddScoped<IDistrictRepository, DistrictRepository>();
+builder.Services.AddScoped<ISalespersonRepository, SalespersonRepository>();
+
+// Framework Services
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// 3. Dependency Injection (Scoped for DB context lifetime)
-builder.Services.AddScoped<IDistrictRepository, DistrictRepository>();
+
 
 var app = builder.Build();
 

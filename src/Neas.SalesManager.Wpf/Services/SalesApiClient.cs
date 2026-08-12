@@ -35,10 +35,22 @@ public class SalesApiClient : ISalesApiClient
     {
         return await _httpClient.GetFromJsonAsync<DistrictDetails>($"api/districts/{districtId}");
     }
-    
+
     public async Task<List<Salesperson>> GetAllSalespersonsAsync()
     {
-        return await _httpClient.GetFromJsonAsync<List<Salesperson>>("api/districts/salespersons") ?? new();
+        // Adding the leading slash prevents relative URL resolution errors
+        var response = await _httpClient.GetAsync("/api/salespersons");
+
+        if (!response.IsSuccessStatusCode)
+        {
+            // Helpful fallback if route differs in your solution: try alternative pluralization route
+            response = await _httpClient.GetAsync("/api/salesperson");
+        }
+
+        response.EnsureSuccessStatusCode();
+
+        var result = await response.Content.ReadFromJsonAsync<List<Salesperson>>();
+        return result ?? new List<Salesperson>();
     }
 
     public async Task AssignSalespersonAsync(int districtId, int salespersonId, bool isPrimary)

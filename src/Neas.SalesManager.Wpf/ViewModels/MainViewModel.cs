@@ -16,6 +16,23 @@ public class MainViewModel : ViewModelBase
     public ObservableCollection<Salesperson> Salespersons { get; } = new();    
     // 1. Add new ObservableCollection for the dropdown items
     public ObservableCollection<Salesperson> AvailableSalespersons { get; } = new();
+    //public ObservableCollection<Salesperson> AssignableSalespersons => new();
+
+    // Clean Filtered Property: Returns ONLY unassigned salespersons (or empty if all are assigned)
+    public IEnumerable<Salesperson> AssignableSalespersons
+    {
+        get
+        {
+            if (AvailableSalespersons == null || !AvailableSalespersons.Any())
+                return Enumerable.Empty<Salesperson>();
+
+            // Get IDs of salespersons already assigned to this district
+            var assignedIds = Salespersons.Select(s => s.SalespersonId).ToHashSet();
+
+            // Return only salespersons who are NOT assigned to this district
+            return AvailableSalespersons.Where(sp => !assignedIds.Contains(sp.SalespersonId)).ToList();
+        }
+    }
 
     private string _newDistrictName = string.Empty;
     public string NewDistrictName
@@ -66,6 +83,21 @@ public class MainViewModel : ViewModelBase
         }
     }
 
+    // Command CanExecute Guard: Disable "Assign Salesperson" button when no unassigned salesperson remains
+    private bool CanAssignSalesperson()
+    {
+        return SelectedDistrict != null
+            && SelectedSalespersonToAssign != null
+            && AssignableSalespersons.Any();
+    }
+
+    // CanExecute predicate
+    private bool CanRemoveSalesperson()
+    {
+        // Enable button ONLY when a secondary salesperson is selected
+        return SelectedSalesperson != null && !SelectedSalesperson.IsPrimary;
+    }
+
     // 2. Add property for the selected salesperson in the dropdown
     private Salesperson? _selectedSalespersonToAssign;
     public Salesperson? SelectedSalespersonToAssign
@@ -108,8 +140,8 @@ public class MainViewModel : ViewModelBase
         CreateDistrictCommand = new AsyncRelayCommand(CreateDistrictAsync, () => !string.IsNullOrWhiteSpace(NewDistrictName) && SelectedPrimaryForNewDistrict != null);
         RefreshCommand = new AsyncRelayCommand(LoadInitialDataAsync);
         AssignSalespersonCommand = new AsyncRelayCommand(AssignSalespersonAsync, () => SelectedDistrict != null);
-        RemoveSalespersonCommand = new AsyncRelayCommand(RemoveSalespersonAsync, () => SelectedSalesperson != null);
-        TogglePrimaryCommand = new AsyncRelayCommand<Salesperson>(TogglePrimarySalespersonAsync);
+        RemoveSalespersonCommand = new AsyncRelayCommand(RemoveSalespersonAsync, CanRemoveSalesperson);
+        TogglePrimaryCommand = new AsyncRelayCommand<Salesperson>(TogglePrimarySalespersonAsync);        
 
         _ = LoadInitialDataAsync(); 
     }
@@ -120,55 +152,78 @@ public class MainViewModel : ViewModelBase
         {
             StatusMessage = "Loading data...";
 
-            // Load All Available Salespersons for the Dropdown
-            AvailableSalespersons.Clear();
+            // Load all system salespersons
             var allSalespersons = await _apiClient.GetAllSalespersonsAsync();
-            foreach (var sp in allSalespersons) AvailableSalespersons.Add(sp);
+            AvailableSalespersons.Clear();
+            foreach (var sp in allSalespersons) AvailableSalespersons.Add(sp);                        
 
-            if (AvailableSalespersons.Any())
-            {
-                SelectedSalespersonToAssign = AvailableSalespersons.First();
-                SelectedPrimaryForNewDistrict = AvailableSalespersons.First();
-            }
+            // Set default selection for Create New District ComboBox
+            SelectedPrimaryForNewDistrict = AvailableSalespersons.FirstOrDefault();
 
             // Load Districts
             Districts.Clear();
             var districtsList = await _apiClient.GetDistrictsAsync();
             foreach (var d in districtsList) Districts.Add(d);
 
-            if (Districts.Any() && SelectedDistrict == null) SelectedDistrict = Districts.First();
+            // Select first district
+            if (Districts.Any() && SelectedDistrict == null)
+            {
+                SelectedDistrict = Districts.First();
+            }
+            else if (SelectedDistrict != null)
+            {
+                await LoadDistrictDetailsAsync();
+            }
 
             StatusMessage = "Data loaded successfully.";
         }
         catch (Exception ex)
         {
-            StatusMessage = "Error loading data.";
-            _dialogService.ShowError($"Failed to load data: {ex.Message}", "Connection Error");
+            StatusMessage = "Failed to load system data.";
+            _dialogService.ShowError($"Error loading salespersons: {ex.Message}", "Initialization Error");
         }
     }
 
+    // Update District Details and Refresh the Dropdown List
     private async Task LoadDistrictDetailsAsync()
     {
         if (SelectedDistrict == null) return;
 
         try
         {
-            StatusMessage = $"Loading details for {SelectedDistrict.Name}...";
-            Stores.Clear();
-            Salespersons.Clear();
-
             var details = await _apiClient.GetDistrictDetailsAsync(SelectedDistrict.DistrictId);
-            if (details != null)
+
+            Salespersons.Clear();
+            if (details?.Salespersons != null)
             {
-                foreach (var st in details.Stores) Stores.Add(st);
-                foreach (var sp in details.Salespersons) Salespersons.Add(sp);
+                foreach (var sp in details.Salespersons)
+                {
+                    Salespersons.Add(sp);
+                }
             }
-            StatusMessage = $"Loaded details for {SelectedDistrict.Name}.";
+
+            Stores.Clear();
+            if (details?.Stores != null)
+            {
+                foreach (var st in details.Stores)
+                {
+                    Stores.Add(st);
+                }
+            }
+
+            // Notify UI to re-evaluate AssignableSalespersons and refresh ComboBox
+            OnPropertyChanged(nameof(AssignableSalespersons));
+
+            // Auto-select the first item in the refreshed list
+            SelectedSalespersonToAssign = AssignableSalespersons.FirstOrDefault();
+
+            // Re-evaluate command CanExecute
+            (AssignSalespersonCommand as AsyncRelayCommand)?.RaiseCanExecuteChanged();
         }
         catch (Exception ex)
         {
-            StatusMessage = "Error loading district details.";
-            MessageBox.Show($"Error loading details: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Warning);
+            StatusMessage = "Failed to load district details.";
+            _dialogService.ShowError(ex.Message, "Data Error");
         }
     }
 
@@ -260,6 +315,33 @@ public class MainViewModel : ViewModelBase
             _dialogService.ShowError(ex.Message, "Assignment Conflict / Error");
         }
     }
+      
+    //private void UpdateAssignableSalespersons()
+    //{
+    //    // Detach selection first so WPF doesn't clear the property unexpectedly
+    //    SelectedSalespersonToAssign = null;
+    //    AssignableSalespersons.Clear();
+
+    //    // If no salespersons exist in the system yet, exit safely
+    //    if (AvailableSalespersons == null || !AvailableSalespersons.Any())
+    //        return;
+
+    //    // Get set of IDs currently assigned to the selected district
+    //    var assignedIds = Salespersons.Select(s => s.SalespersonId).ToHashSet();
+
+    //    // Populate only unassigned salespersons
+    //    foreach (var sp in AvailableSalespersons)
+    //    {
+    //        if (!assignedIds.Contains(sp.SalespersonId))
+    //        {
+    //            AssignableSalespersons.Add(sp);
+    //        }
+    //    }
+
+    //    // Auto-select the first unassigned salesperson in the dropdown
+    //    SelectedSalespersonToAssign = AssignableSalespersons.FirstOrDefault();
+    //    OnPropertyChanged(nameof(SelectedSalespersonToAssign));
+    //}
 
     private async Task RemoveSalespersonAsync()
     {

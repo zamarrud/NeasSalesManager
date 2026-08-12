@@ -47,9 +47,9 @@
 
                         <TextBlock Text="Initial Primary Salesperson:" Margin="0,0,0,4"/>
                         <ComboBox ItemsSource="{Binding AvailableSalespersons}" 
-                                  SelectedItem="{Binding SelectedPrimaryForNewDistrict}"
-                                  DisplayMemberPath="FullNameWithId" 
-                                  Margin="0,0,0,10"/>
+                              SelectedItem="{Binding SelectedPrimaryForNewDistrict}"
+                              DisplayMemberPath="FullNameWithId" 
+                              Margin="0,0,0,10"/>
 
                         <Button Content="Create District" Command="{Binding CreateDistrictCommand}" 
                                 Padding="8,5" Background="#2563EB" Foreground="White" FontWeight="Bold" BorderThickness="0"/>
@@ -98,20 +98,23 @@
                     </DockPanel>
                 </GroupBox>
 
-                <!-- Assign Form with Name Dropdown -->
+                <!-- Assign Form with Filtered Dropdown -->
                 <GroupBox Grid.Row="1" Header="Assign / Update Salesperson" FontWeight="Bold" Margin="0,0,0,10" Padding="10">
-                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                        <TextBlock Text="Select Salesperson:" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                    <Grid>
+                        <!-- Form Controls -->
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <TextBlock Text="Select Salesperson:" VerticalAlignment="Center" Margin="0,0,10,0"/>
 
-                        <ComboBox ItemsSource="{Binding AvailableSalespersons}" 
+                            <ComboBox ItemsSource="{Binding AssignableSalespersons}" 
                                   SelectedItem="{Binding SelectedSalespersonToAssign}"
                                   DisplayMemberPath="FullNameWithId" 
-                                  Width="220" Padding="6,4" VerticalAlignment="Center" Margin="0,0,15,0"/>
+                                  Width="240" Padding="6,4" VerticalAlignment="Center" Margin="0,0,15,0"/>
 
-                        <CheckBox Content="Set as Primary Salesperson" IsChecked="{Binding IsPrimaryAssign}" VerticalAlignment="Center" Margin="0,0,15,0"/>
+                            <CheckBox Content="Set as Primary Salesperson" IsChecked="{Binding IsPrimaryAssign}" VerticalAlignment="Center" Margin="0,0,15,0"/>
 
-                        <Button Content="Assign Salesperson" Command="{Binding AssignSalespersonCommand}" Padding="12,6" Background="#16A34A" Foreground="White" FontWeight="Bold" BorderThickness="0"/>
-                    </StackPanel>
+                            <Button Content="Assign Salesperson" Command="{Binding AssignSalespersonCommand}" Padding="12,6" Background="#16A34A" Foreground="White" FontWeight="Bold" BorderThickness="0"/>
+                        </StackPanel>
+                    </Grid>
                 </GroupBox>
 
                 <!-- District Stores DataGrid with Empty State Message -->

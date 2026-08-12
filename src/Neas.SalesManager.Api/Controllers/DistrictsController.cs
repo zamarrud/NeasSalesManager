@@ -55,42 +55,34 @@ public class DistrictsController : ControllerBase
 
         return Ok(district);
     }
-
-    [HttpGet("salespersons")]
-    [ProducesResponseType(typeof(IEnumerable<SalespersonDto>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetAllSalespersons()
-    {
-        var salespersons = await _repository.GetAllSalespersonsAsync();
-        return Ok(salespersons);
-    }
-
-    [HttpPut("{id:int}/salespersons")]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> AssignSalesperson(int id, [FromBody] AssignSalespersonRequest request)
+        
+    /// <summary>
+    /// Assigns or updates a salesperson for a given district.
+    /// Supports both POST and PUT methods to maintain RESTful idempotency and API client compatibility.
+    /// </summary>
+    [HttpPost("{districtId:int}/salespersons")]
+    [HttpPut("{districtId:int}/salespersons")]
+    public async Task<IActionResult> AssignSalesperson(int districtId, [FromBody] AssignSalespersonRequest request)
     {
         if (request.SalespersonId <= 0)
-        {
-            return BadRequest(new { Message = "Invalid SalespersonId specified." });
-        }
+            return BadRequest(new { message = "Valid SalespersonId is required." });
 
-        await _repository.AssignSalespersonAsync(id, request.SalespersonId, request.IsPrimary);
+        await _repository.AssignSalespersonAsync(districtId, request.SalespersonId, request.IsPrimary);
 
         _logger.LogInformation("Assigned Salesperson {SalespersonId} to District {DistrictId} (Primary: {IsPrimary})",
-            request.SalespersonId, id, request.IsPrimary);
+            request.SalespersonId, districtId, request.IsPrimary);
 
-        return NoContent();
+        return Ok(new { message = "Salesperson assignment updated successfully." });
     }
 
-    [HttpDelete("{id:int}/salespersons/{salespersonId:int}")]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
-    public async Task<IActionResult> RemoveSalesperson(int id, int salespersonId)
+    [HttpDelete("{districtId:int}/salespersons/{salespersonId:int}")]
+    public async Task<IActionResult> RemoveSalesperson(int districtId, int salespersonId)
     {
-        await _repository.RemoveSalespersonAsync(id, salespersonId);
+        await _repository.RemoveSalespersonAsync(districtId, salespersonId);
 
         _logger.LogInformation("Removed Salesperson {SalespersonId} from District {DistrictId}",
-            salespersonId, id);
+            salespersonId, districtId);
 
-        return NoContent();
+        return NoContent(); 
     }
 }
