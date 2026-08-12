@@ -9,13 +9,13 @@ using Xunit;
 
 namespace Neas.SalesManager.Api.Tests;
 
-public class DistrictsControllerTests
+public class SalespersonControllerTests
 {
     private readonly Mock<IDistrictRepository> _mockRepo;
     private readonly Mock<ILogger<DistrictsController>> _mockLogger;
     private readonly DistrictsController _controller;
 
-    public DistrictsControllerTests()
+    public SalespersonControllerTests()
     {
         _mockRepo = new Mock<IDistrictRepository>();
         _mockLogger = new Mock<ILogger<DistrictsController>>();

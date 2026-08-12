@@ -18,6 +18,9 @@ public class SalespersonsController : ControllerBase
         _logger = logger;
     }
 
+    /// <summary>
+    /// Commandment 2: Systems expose/share data via Web Services - Data is available via HTTP GET
+    /// </summary>
     [HttpGet]
     [ProducesResponseType(typeof(IEnumerable<SalespersonDto>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetAllSalespersons()

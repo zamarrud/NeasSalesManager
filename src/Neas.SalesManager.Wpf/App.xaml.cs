@@ -14,6 +14,13 @@ public partial class App : Application
         var services = new ServiceCollection();
 
         services.AddHttpClient<ISalesApiClient, SalesApiClient>();
+        
+        services.AddHttpClient<ISalesApiClient, SalesApiClient>(client =>
+        {
+            client.BaseAddress = new Uri("http://localhost:5000/");
+            client.DefaultRequestHeaders.Add("Accept", "application/json");
+        });
+
         services.AddSingleton<IDialogService, DialogService>();
         services.AddSingleton<MainViewModel>();
         services.AddSingleton<MainWindow>();
