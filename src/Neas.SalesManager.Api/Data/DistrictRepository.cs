@@ -1,5 +1,4 @@
-﻿// src/Neas.SalesManager.Api/Data/DistrictRepository.cs
-using System.Data;
+﻿using System.Data;
 using Dapper;
 using Microsoft.Data.SqlClient;
 using Neas.SalesManager.Api.DTOs;

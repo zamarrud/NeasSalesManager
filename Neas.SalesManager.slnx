@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/Neas.SalesManager.Api/Neas.SalesManager.Api.csproj" />
+    <Project Path="src/Neas.SalesManager.Contracts/Neas.SalesManager.Contracts.csproj" />
     <Project Path="src/Neas.SalesManager.Wpf/Neas.SalesManager.Wpf.csproj" />
   </Folder>
   <Folder Name="/tests/">

@@ -18,4 +18,8 @@
     <Folder Include="RoleColorConverter\" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\Neas.SalesManager.Contracts\Neas.SalesManager.Contracts.csproj" />
+  </ItemGroup>
+
 </Project>

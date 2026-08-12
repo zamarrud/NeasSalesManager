@@ -1,5 +1,4 @@
-﻿// src/Neas.SalesManager.Api/Data/IDistrictRepository.cs
-using Neas.SalesManager.Api.DTOs;
+﻿using Neas.SalesManager.Api.DTOs;
 
 namespace Neas.SalesManager.Api.Data;
 

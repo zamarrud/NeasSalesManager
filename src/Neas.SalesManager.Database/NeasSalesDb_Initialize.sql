@@ -291,6 +291,42 @@ BEGIN
 END;
 GO
 
+-- Stored Procedure for explicit removal
+CREATE OR ALTER PROCEDURE dbo.sp_RemoveSalespersonFromDistrict
+    @DistrictId INT,
+    @SalespersonId INT
+AS
+BEGIN
+    SET NOCOUNT ON;
+
+    BEGIN TRANSACTION;
+    BEGIN TRY
+        -- Guard: Check if salesperson is Primary
+        IF EXISTS (
+            SELECT 1 
+            FROM dbo.DistrictSalesperson 
+            WHERE DistrictId = @DistrictId AND SalespersonId = @SalespersonId AND IsPrimary = 1
+        )
+        BEGIN
+            RAISERROR ('Cannot remove the primary salesperson. Reassign the primary role to another salesperson first.', 16, 1);
+            ROLLBACK TRANSACTION;
+            RETURN;
+        END
+
+        -- Execute Removal
+        DELETE FROM dbo.DistrictSalesperson
+        WHERE DistrictId = @DistrictId AND SalespersonId = @SalespersonId;
+
+        COMMIT TRANSACTION;
+    END TRY
+    BEGIN CATCH
+        IF @@TRANCOUNT > 0
+            ROLLBACK TRANSACTION;
+        THROW;
+    END CATCH
+END;
+GO
+
 -- ============================================================================
 -- 5. SEED DATA GENERATION
 -- ============================================================================
